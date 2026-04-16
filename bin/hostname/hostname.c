@@ -35,8 +35,10 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/sysctl.h>
+#if !defined(__APPLE__)
 #include <sys/module.h>
 #include <sys/linker.h>
+#endif
 
 #include <net/ethernet.h>
 #include <net/if.h>

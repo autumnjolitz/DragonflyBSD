@@ -4,13 +4,39 @@ OPWD="$PWD"
 # set -x
 set -eu
 
-command -v bmake || brew install bmake
+SRC="$(dirname "$(realpath "$0")")"
+MAKEOBJDIRPREFIX="${MAKEOBJDIRPREFIX:-${SRC}.obj}"
 
-if ! >/dev/null pkg-config --cflags libbsd-overlay ; then
-    brew install libbsd
+SDK="${SDK:-}"
+
+
+if [ -z "${BUILD_SKIP_BREW:-}" ]; then
+    brew bundle install --file "$SRC/Brewfile"
 fi
+
+CLANG_HOME="$(brew --prefix llvm@21)"
+
+
+if [ -z "$SDK" ] ; then
+    for maybe_sdk in \
+        /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk \
+        /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk \
+        ; do
+        if [ -d "$maybe_sdk" ]; then
+            SDK="$maybe_sdk"
+            break
+        fi
+    done
+    if [ -z "$SDK" ]; then
+        >&2 printf 'error: Unable to locate MacOSX.sdk, please install xcode or Command Line Tools\n'
+        exit 1
+    fi
+fi
+
+
 _verbose=0
 make_args=crossworld
+
 while [ $# -gt 0 ]; do
     case "${1}" in
         -v|--verbose)
@@ -33,58 +59,34 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-D="$(mktemp -d)"
-cd "$D"
-
-SRC="$HOME/software/DragonFlyBSD"
-SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
-if [ "$SYSROOT" != '' ]; then
-    mkdir -p "$SYSROOT"
+if [ ! -d "$MAKEOBJDIRPREFIX" ]; then
+    mkdir -p "$MAKEOBJDIRPREFIX"
 fi
 
+D="$(mktemp -d /tmp/dragonfly-buildroot.XXXX)"
+cd "$D"
+
 cleanup() {
-    if [ "$SYSROOT" != '' ]; then
-        rm -fd "$SYSROOT" || true
-    fi
     rm -rf "$D"
 }
 
 trap cleanup EXIT
 
-mkdir -p bin etc/defaults lib include/overlay/{sys,machine}
+mkdir -p \
+    bin \
+    etc/defaults \
+    lib \
+    include/overlay/{sys,machine}
 
-cp $SRC/etc/defaults/compilers.conf etc/defaults/compilers.conf
+cp $SRC/etc/defaults/compilers.conf \
+    etc/defaults/compilers.conf
 
 
-# ln -sf /opt/homebrew/Cellar/x86_64-elf-binutils/2.46.0/lib/x86_64-elf/bfd-plugins
-#        /usr/libexec/binutils246/bfd-plugins
-# ln -sf /opt/homebrew/Cellar/x86_64-elf-binutils/2.46.0/x86_64-elf/lib/ldscripts/
-#        /usr/libexec/binutils246/ldscripts
-# ln -sf /opt/homebrew/Cellar/x86_64-elf-binutils/2.46.0/x86_64-elf/bin
-#        /usr/libexec/binutils246/elf
-# 1. bindfs $(brew whereis x86_64-elf-binutils)  to /usr/libexec/binutils
-# 2. sshfs nyx.lan:/usr/libexec/custom /usr/libexec/custom
-# 3. sudo ln -sf x86_64-elf-gcc.conf to /etc/compilers.conf
-
-mkdir -p "${SRC}.obj"
-
-if [ ! -d $(echo /opt/homebrew/Cellar/llvm@*/*/bin) ]; then
-    >&2 printf 'Unable to find clang21!\n'
-    exit 1
-fi
-CLANG_HOME="$(realpath "$(ls -1d /opt/homebrew/Cellar/llvm@*/*/ | head -1)")"
-LD_HOME="$(realpath "$(ls -1d /opt/homebrew/Cellar/lld@*/*/ | head -1)")"
-
->_buildshim.c cat <<EOF
+>assert.c cat <<EOF
 #include <sys/param.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <runetype.h>
-/*
- * A cached version of the runes for this thread.  Used by ctype.h
- */
-__thread const _RuneLocale *_ThreadRuneLocale;
 
 __attribute__((noreturn)) void __assert(
     const char *funcName,
@@ -102,14 +104,29 @@ __attribute__((noreturn)) void __assert(
     write(2, buf, buf_len);
     exit(EXIT_FAILURE);    
 }
+EOF
+
+>_init.c cat <<EOF
+#include <sys/param.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <runetype.h>
+
+/*
+ * A cached version of the runes for this thread.
+ * Used by ctype.h
+ */
+__thread const _RuneLocale *_ThreadRuneLocale;
 
 volatile int __isthreaded = 1;
 
 int getosreldate(void) {
     return __DragonFly_version;
 };
-
 EOF
+
+
 >varsym_shim.c cat <<EOF
 #include <overlay/sys/varsym.h>
 
@@ -124,7 +141,7 @@ int yywrap(void) {
 EOF
 
 >include/overlay/fts.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<fts.h>)
 #include_next <fts.h>
 #endif
@@ -141,7 +158,7 @@ EOF
 EOF
 
 >include/overlay/sys/stdarg.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/stdarg.h>)
 #include_next <sys/stdarg.h>
 #endif
@@ -157,7 +174,7 @@ EOF
 #endif
 EOF
 >include/overlay/machine/stdarg.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<machine/stdarg.h>)
 #include_next <machine/stdarg.h>
 #endif
@@ -184,7 +201,7 @@ typedef va_list __va_list;
 #endif
 EOF
 >include/overlay/machine/wchar.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 
 #ifndef _MACHINE_WCHAR_H_
 #define _MACHINE_WCHAR_H_
@@ -201,7 +218,7 @@ typedef wint_t __wint_t;
 EOF
 
 >include/overlay/sys/_clock_id.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 
 #ifndef _SYS_CLOCK_ID_H_
 #define _SYS_CLOCK_ID_H_
@@ -212,7 +229,7 @@ EOF
 #endif
 EOF
 >include/overlay/sys/_null.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 
 #ifndef _SYS_NULL_H_
 #define _SYS_NULL_H_
@@ -224,8 +241,48 @@ EOF
 #endif
 EOF
 
+>include/overlay/sys/device.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<sys/device.h>)
+#include_next <sys/device.h>
+#endif
+#else
+#if __has_include(<sys/device.h>)
+#include <sys/device.h>
+#endif
+#endif
+
+#ifndef _OVERLAY_SYS_DEVICE_H_
+#define _OVERLAY_SYS_DEVICE_H_
+#include <sys/ioctl.h>
+#define D_MEM 0
+
+#endif
+
+EOF
+
+
+
+>include/overlay/signal.h cat <<'EOF'
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<signal.h>)
+#include_next <signal.h>
+#endif
+#else
+#if __has_include(<signal.h>)
+#include <signal.h>
+#endif
+#endif
+
+#ifndef OVERLAY_SIGNAL_H
+#define OVERLAY_SIGNAL_H
+#define sys_nsig 16
+
+#endif
+EOF
+
 >include/overlay/assert.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<assert.h>)
 #include_next <assert.h>
 #endif
@@ -245,7 +302,7 @@ EOF
 #endif
 EOF
 >include/overlay/unistd.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<unistd.h>)
 #include_next <unistd.h>
 #endif
@@ -263,7 +320,7 @@ EOF
 #endif
 EOF
 >include/overlay/sys/unistd.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/unistd.h>)
 #include_next <sys/unistd.h>
 #endif
@@ -280,12 +337,12 @@ EOF
 
 int getosreldate(void);
 int pipe2(int fildes[2], int flags);
-
+int eaccess(const char *path, int mode);
 #endif
 EOF
 
 >include/overlay/time.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<time.h>)
 #include_next <time.h>
 #endif
@@ -305,7 +362,7 @@ typedef pid_t     lwpid_t;
 EOF
 
 >include/overlay/sys/stat.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/stat.h>)
 #include_next <sys/stat.h>
 #endif
@@ -326,7 +383,7 @@ EOF
 EOF
 
 >include/overlay/sys/mman.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/mman.h>)
 #include_next <sys/mman.h>
 #endif
@@ -347,7 +404,7 @@ EOF
 EOF
 
 >include/overlay/stdlib.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<stdlib.h>)
 #include_next <stdlib.h>
 #endif
@@ -364,7 +421,7 @@ EOF
 EOF
 
 >include/overlay/sys/param.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/param.h>)
 #include_next <sys/param.h>
 #endif
@@ -391,7 +448,7 @@ EOF
 EOF
 
 >include/overlay/sys/_termios.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/termios.h>)
 #include_next <sys/termios.h>
 #endif
@@ -409,7 +466,7 @@ EOF
 
 >include/overlay/sys/cdefs.h cat <<EOF
 
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/cdefs.h>)
 #include_next <sys/cdefs.h>
 #endif
@@ -452,7 +509,7 @@ EOF
 #endif
 
 #define __nonnull(...)  __attribute__((__nonnull__(__VA_ARGS__)))
-
+#define __aligned(n) __attribute__ ((aligned(n)))
 #define _Noreturn __attribute__((noreturn))
 
 #define CTASSERT(x)     _CTASSERT(x, __LINE__)
@@ -563,7 +620,7 @@ EOF
 done
 
 >include/overlay/string.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<string.h>)
 #include_next <string.h>
 #endif
@@ -586,8 +643,38 @@ char *stpcpy(char * restrict dst, const char * restrict src);
 #endif
 EOF
 
+>include/overlay/stdio.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<stdio.h>)
+#include_next <stdio.h>
+#endif
+#else
+#if __has_include(<stdio.h>)
+#include <stdio.h>
+#endif
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef _OVERLAY_STDIO_H_
+#define _OVERLAY_STDIO_H_
+int fputs_unlocked(const char *str, FILE *stream);
+
+#endif
+
+#ifdef __cplusplus
+}
+#endif
+EOF
+
 >include/overlay/sys/varsym.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #ifndef _SYS_VARSYM_H_
 #define _SYS_VARSYM_H_
@@ -599,9 +686,13 @@ int varsym_get(int mask, const char *wild, char *buf, int bufsize);
 
 #endif
 #endif
+
+#ifdef __cplusplus
+}
+#endif
 EOF
 >include/overlay/sys/timespec.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/timespec.h>)
 #include_next <sys/timespec.h>
 #endif
@@ -610,7 +701,7 @@ EOF
 #include <sys/timespec.h>
 #endif
 #endif
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 
 #ifndef _SYS_TIMESPEC_H_
 #define _SYS_TIMESPEC_H_
@@ -622,7 +713,7 @@ EOF
 EOF
 
 >include/overlay/sys/procfs.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/procfs.h>)
 #include_next <sys/procfs.h>
 #endif
@@ -647,7 +738,7 @@ EOF
 EOF
 
 >include/overlay/sys/_timespec.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/_timespec.h>)
 #include_next <sys/_timespec.h>
 #endif
@@ -665,6 +756,12 @@ EOF
 EOF
 
 >include/overlay/sys/_pthread_spinlock.h cat << 'EOF'
+#ifndef _PTHREAD_SPINLOCK_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+#if defined(__APPLE__)
 #include <os/lock.h>
 
 typedef os_unfair_lock_t pthread_spinlock_t;
@@ -674,7 +771,12 @@ int pthread_spin_destroy(pthread_spinlock_t *lock);
 int pthread_spin_lock(pthread_spinlock_t *lock);
 int pthread_spin_trylock(pthread_spinlock_t *lock);
 int pthread_spin_unlock(pthread_spinlock_t *lock);
+#endif
+#ifdef __cplusplus
+}
+#endif
 
+#endif
 EOF
 
 >pthread_spinlock.c cat <<'EOF'
@@ -797,7 +899,7 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 EOF
 
 >include/overlay/pthread.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<pthread.h>)
 #include_next <pthread.h>
 #endif
@@ -819,7 +921,7 @@ EOF
 EOF
 
 >include/overlay/sys/_pthreadtypes.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/_pthreadtypes.h>)
 #include_next <sys/_pthreadtypes.h>
 #endif
@@ -848,7 +950,7 @@ EOF
 EOF
 
 >include/overlay/sys/sched.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<pthread/sched.h>)
 #include_next <pthread/sched.h>
 #endif
@@ -864,7 +966,7 @@ EOF
 EOF
 
 >include/overlay/sys/cpumask.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/cpumask.h>)
 #include_next <sys/cpumask.h>
 #endif
@@ -887,7 +989,7 @@ typedef __cpumask_t cpumask_t;
 EOF
 
 >include/overlay/sys/limits.h cat <<'EOF'
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #   if defined(__aarch64__) && __has_include_next(<arm/limits.h>)
 #     include_next <arm/limits.h>
 #   elif defined(__i386__) && __has_include_next(<i386/limits.h>)
@@ -911,7 +1013,7 @@ EOF
 EOF
 
 >include/overlay/machine/atomic.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<machine/stdatomic.h>)
 #include_next <machine/stdatomic.h>
 #endif
@@ -920,7 +1022,7 @@ EOF
 #include <machine/stdatomic.h>
 #endif
 #endif
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 
 #ifndef _MACHINE_ATOMIC_H_
 #define _MACHINE_ATOMIC_H_
@@ -935,7 +1037,7 @@ EOF
 EOF
 
 >include/overlay/machine/inttypes.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<inttypes.h>)
 #include_next <inttypes.h>
 #endif
@@ -944,7 +1046,7 @@ EOF
 #include <inttypes.h>
 #endif
 #endif
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 
 #ifndef _MACHINE_ATOMIC_H_
 #define _MACHINE_ATOMIC_H_
@@ -955,7 +1057,7 @@ EOF
 
 
 >include/overlay/machine/stdint.h cat <<EOF
-#ifdef COMPAT_OVERLAY
+#ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<stdint.h>)
 #include_next <stdint.h>
 #endif
@@ -1074,6 +1176,8 @@ EOF
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+/* imported from: https://github.com/ademakov/DarwinPthreadBarrier */
+
 #include <pthread.h>
 #include <sys/_pthread_barrier.h>
 
@@ -1175,6 +1279,15 @@ pthread_barrier_wait(pthread_barrier_t *barrier)
 
 EOF
 
+>eaccess.c cat <<EOF
+#include <unistd.h>
+#include <fcntl.h>
+
+int eaccess(const char *path, int mode) {
+    return faccessat(AT_FDCWD, path, mode, AT_EACCESS);
+};
+EOF
+
 >pipe2.c cat <<EOF
 #include <unistd.h>
 #include <fcntl.h>
@@ -1224,7 +1337,7 @@ ssize_t __fpending(const FILE *fp)
 {
     if ((fp)->_bf._base != NULL) {
         if (HASUB(fp))
-            return(fp->_ur - strlen(fp->_bf._base));
+            return(fp->_ur - (int) fp->_bf._base);
         else
             return(fp->_p - fp->_bf._base);
     }
@@ -1232,6 +1345,12 @@ ssize_t __fpending(const FILE *fp)
 }
 EOF
 
+>fputs_unlocked.c cat <<'EOF'
+#include <stdio.h>
+int fputs_unlocked(const char *str, FILE *stream) {
+    return fputs(str, stream);
+};
+EOF
 
 >bin/ld-flags-from-script cat <<'EOF'
 #!/usr/bin/env python3
@@ -1239,7 +1358,9 @@ import shlex
 import re
 import sys
 from tempfile import NamedTemporaryFile
+
 version_name = None
+
 ops = []
 file = sys.argv[1]
 with open(file, "r") as fh:
@@ -1381,49 +1502,57 @@ exec /usr/bin/ld $(printf '%s\n' "$args" | tr '\n' ' ')
 EOF
 chmod +x bin/ld
 
+LIBDARWIN_CFLAGS="-isystem $D/include/overlay -DLIBDARWIN_OVERLAY"
+LIBDARWIN_LDFLAGS="-L$D/lib -lDarwin"
 
 ${CLANG_HOME}/bin/clang \
-    -isystem "$D/include/overlay" \
-    -D COMPAT_OVERLAY \
+    $LIBDARWIN_CFLAGS \
     -c \
     pthread_barrier.c \
     -o lib/pthread_barrier.o
 
 
 ${CLANG_HOME}/bin/clang \
-    -isystem "$D/include/overlay" \
-    -D COMPAT_OVERLAY \
+    $LIBDARWIN_CFLAGS \
     -c \
     fpending.c \
     -o lib/fpending.o
 
 ${CLANG_HOME}/bin/clang \
-    -isystem "$D/include/overlay" \
-    -D COMPAT_OVERLAY \
+    $LIBDARWIN_CFLAGS \
     -c \
     string.c \
     -o lib/string.o
 ${CLANG_HOME}/bin/clang \
-    -isystem "$D/include/overlay" \
-    -D COMPAT_OVERLAY \
+    $LIBDARWIN_CFLAGS \
     -c \
     pipe2.c \
     -o lib/pipe2.o
 
 ${CLANG_HOME}/bin/clang \
-    -isystem "$D/include/overlay" \
-    -D COMPAT_OVERLAY \
+    $LIBDARWIN_CFLAGS \
+    -c \
+    fputs_unlocked.c \
+    -o lib/fputs_unlocked.o
+
+${CLANG_HOME}/bin/clang \
+    $LIBDARWIN_CFLAGS \
+    -c \
+    eaccess.c \
+    -o lib/eaccess.o
+
+${CLANG_HOME}/bin/clang \
+    $LIBDARWIN_CFLAGS \
     -c \
     pthread_spinlock.c \
     -o lib/pthread_spinlock.o
 
 ${CLANG_HOME}/bin/clang \
     -I "$D/include" \
-    -D COMPAT_OVERLAY \
+    -D LIBDARWIN_OVERLAY \
     -c \
     varsym_shim.c \
     -o lib/varsym_shim.o
-
 ${CLANG_HOME}/bin/clang -c \
     $SRC/lib/libc/net/base64.c \
     -o lib/base64.o
@@ -1443,23 +1572,26 @@ ${CLANG_HOME}/bin/clang -c \
     yywrap.c \
     -o lib/yywrap.o
 ${CLANG_HOME}/bin/clang \
-    -isystem "$D/include/overlay" \
-    -D COMPAT_OVERLAY \
+    $LIBDARWIN_CFLAGS \
     -c \
-    _buildshim.c \
-    -o lib/_buildshim.o
+    assert.c \
+    -o lib/assert.o
 ${CLANG_HOME}/bin/clang \
-    -isystem "$D/include/overlay" \
-    -D COMPAT_OVERLAY \
+    $LIBDARWIN_CFLAGS \
+    -c \
+    _init.c \
+    -o lib/_init.o
+${CLANG_HOME}/bin/clang \
+    $LIBDARWIN_CFLAGS \
     -c \
     $SRC/lib/libc/gen/getobjformat.c \
     -o lib/getobjformat.o
 
-ar rvs $PWD/lib/lib_buildshim.a \
+ar rvs $PWD/lib/libDarwin.a \
+        lib/_init.o \
         lib/base64.o \
         lib/yywrap.o \
         lib/reallocarray.o \
-        lib/_buildshim.o \
         lib/varsym_shim.o \
         lib/memrchr.o \
         lib/memchr.o \
@@ -1469,17 +1601,20 @@ ar rvs $PWD/lib/lib_buildshim.a \
         lib/fpending.o \
         lib/pipe2.o \
         lib/getobjformat.o \
-        lib/string.o
+        lib/string.o \
+        lib/eaccess.o \
+        lib/assert.o \
+        lib/fputs_unlocked.o
 
 rm -f lib/*.o
-LIBOSX_OVERLAY_CFLAGS="-isystem $D/include/overlay -DCOMPAT_OVERLAY"
+
 
 install -C \
     $SRC/sys/sys/queue.h \
     include/overlay/sys/queue.h
 
 EXTRA_CFLAGS="-Wno-macro-redefined -Wno-nullability-completeness"
-EXTRA_CXXFLAGS=
+EXTRA_CXXFLAGS="-L${CLANG_HOME}/lib/c++ -L${CLANG_HOME}/lib/unwind -lunwind"
 
 cat >etc/compilers.conf <<EOF
 
@@ -1487,8 +1622,8 @@ clang21_CC=${CLANG_HOME}/bin/clang
 clang21_CXX=${CLANG_HOME}/bin/clang++
 clang21_CPP=${CLANG_HOME}/bin/clang-cpp
 clang21_GCOV=${CLANG_HOME}/bin/clang-cov
-clang21_INCOPT="-nostdinc -iwithprefixbefore ${D}/include -iprefix \${INCPREFIX} -iwithprefix ${SYSROOT}/usr/include -isystem ${CLANG_HOME}/lib/clang/21/include ${LIBOSX_OVERLAY_CFLAGS} $(pkg-config --cflags libbsd-overlay) ${EXTRA_CFLAGS}"
-clang21_INCOPTCXX="-cxx-isystem ${SYSROOT}/usr/include/c++/v1 -iwithprefixbefore ${SYSROOT}/usr/include/c++/v1 ${EXTRA_CXXFLAGS}"
+clang21_INCOPT="-nostdinc -iwithprefixbefore ${D}/include -iprefix \${INCPREFIX} --include-directory-after ${SDK}/usr/include --include-directory-after ${CLANG_HOME}/lib/clang/21/include ${LIBDARWIN_CFLAGS} $(pkg-config --cflags libbsd-overlay) ${EXTRA_CFLAGS}"
+clang21_INCOPTCXX="-nostdinc++ -D_LIBCPP_DISABLE_AVAILABILITY -cxx-isystem ${CLANG_HOME}/include/c++/v1 ${EXTRA_CXXFLAGS}"
 clang21_CLANG=\${clang21_CC}
 clang21_CLANGCXX=\${clang21_CXX}
 clang21_CLANGCPP=\${clang21_CPP}
@@ -1532,7 +1667,33 @@ ln -sf "$(command -v make)"     bin/gmake
 ln -sf "$(command -v bmake)"    bin/make
 
 export PATH="${D}/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-sed -i '' 's|nochange||g' $SRC/etc/mtree/BSD.usr.dist
+
+> bin/mtree cat << 'EOF'
+#!/usr/bin/env sh
+set -eu
+
+parse_args() {
+    while [ $# -gt 0 ]; do
+        case "${1}" in
+            -f)
+            shift
+            filename="${1}"
+            shift
+            processed="$(mktemp)"
+            >"$processed" sed 's|nochange||g' "${filename}"
+            printf '%s %s\n' '-f' "$processed"
+            ;;
+            *)
+            printf '%s\n' "${1}"
+            shift
+            ;;
+        esac
+    done
+}
+
+exec /usr/sbin/mtree $(parse_args $@ | tr '\n' ' ')
+EOF
+chmod +x bin/mtree
 
 install -m0755 \
     $SRC/usr.bin/mkdep/mkdep.sh \
@@ -1555,7 +1716,7 @@ rc=0
 
 start-build() {
     env \
-    MAKEOBJDIRPREFIX="$(realpath $SRC.obj)" \
+    MAKEOBJDIRPREFIX="$MAKEOBJDIRPREFIX" \
     __MAKE_CONF=$D/etc/make.conf \
     MACHINE_PLATFORM=pc64 \
     HOST_BINUTILSVER=binutils234 \
@@ -1571,7 +1732,7 @@ start-build() {
         TARGET_PLATFORM=pc64 \
         CC="$D/bin/cc" \
         _HOSTPATH="${D}/bin:${PATH}" \
-        EXTRA_LDADD+="$(pkg-config --libs libbsd-overlay) -L$D/lib -l_buildshim" \
+        EXTRA_LDADD+="$(pkg-config --libs libbsd-overlay) ${LIBDARWIN_LDFLAGS}" \
         "$make_args"
 }
 
@@ -1589,7 +1750,7 @@ if [ "${_background}" != '' ]; then
 fi
 
 if [ $rc -ne 0 ]; then
-    if [ "$_log" ]; then
+    if [ ! -z "$_log" ]; then
         >&2 printf 'examine log at: %s\n' "$LOGFILE"
     fi
     exit $rc

@@ -15,8 +15,8 @@ CFLAGS+=	-DHAVE_CONFIG_H
 CFLAGS+=	-DBOOTSTRAPPING
 .endif
 
-DPADD=		../libgreputils/libgreputils.a
-LDADD=		../libgreputils/libgreputils.a
+DPADD+=		../libgreputils/libgreputils.a
+LDADD+=		../libgreputils/libgreputils.a
 BINDIR?=	/usr/bin
 
 SRCS=		grep.c \

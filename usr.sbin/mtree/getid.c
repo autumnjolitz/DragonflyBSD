@@ -65,6 +65,10 @@
 #include <grp.h>
 #include <limits.h>
 #include <pwd.h>
+#if defined(__APPLE__)
+#include <uuid/uuid.h>
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -127,11 +131,13 @@ setup_getid(const char *dir)
 		return (0);
 
 				/* switch pwcache(3) lookup functions */
+	#if !defined(__APPLE__)
 	if (pwcache_groupdb(gi_setgroupent, gi_endgrent,
 			    gi_getgrnam, gi_getgrgid) == -1
 	    || pwcache_userdb(gi_setpassent, gi_endpwent,
 			    gi_getpwnam, gi_getpwuid) == -1)
 		return (0);
+	#endif
 
 	return (1);
 }

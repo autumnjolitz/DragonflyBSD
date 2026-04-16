@@ -42,7 +42,6 @@ MACHREL=@@MACHREL@@	# e.g., 6.5
 . /etc/defaults/compilers.conf
 [ -f /etc/compilers.conf ] && . /etc/compilers.conf
 
-
 case ${CNAME} in
 	gcc)
 		eval 'CUSTOM_GCC=${'${CCVER}'_GCC}'

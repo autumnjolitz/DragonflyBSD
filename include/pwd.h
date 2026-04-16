@@ -148,7 +148,7 @@ __BEGIN_DECLS
 struct passwd	*getpwnam(const char *);
 struct passwd	*getpwuid(uid_t);
 
-#if __XSI_VISIBLE >= 500
+#if __XSI_VISIBLE >= 500 || defined(__APPLE__)
 void		 endpwent(void);
 struct passwd	*getpwent(void);
 void		 setpwent(void);
@@ -161,7 +161,7 @@ int		 getpwuid_r(uid_t, struct passwd *, char *, size_t,
 		    struct passwd **);
 #endif
 
-#if __BSD_VISIBLE
+#if defined(__BSD_VISIBLE) || defined(__APPLE__)
 int		 getpwent_r(struct passwd *, char *, size_t, struct passwd **);
 int		 setpassent(int);
 const char	*user_from_uid(uid_t, int);

@@ -46,6 +46,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#if defined(__APPLE__)
+#define st_atim st_atimespec
+#define st_ctim st_ctimespec
+#define st_mtim st_mtimespec
+#endif
+
+
 static void	stime_arg1(const char *, struct timeval *);
 static void	stime_arg2(const char *, int, struct timeval *);
 static void	stime_darg(const char *, struct timeval *);

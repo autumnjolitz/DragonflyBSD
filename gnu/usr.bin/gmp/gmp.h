@@ -34,6 +34,8 @@ along with the GNU MP Library.  If not, see http://www.gnu.org/licenses/.  */
 #define __GMP_BITS_PER_MP_LIMB             32
 #elif defined(__x86_64__)
 #define __GMP_BITS_PER_MP_LIMB             64
+#elif defined(__arm64__)
+#define __GMP_BITS_PER_MP_LIMB             64
 #else
 #error Platform Not Supported!
 #endif

@@ -37,7 +37,9 @@
  */
 
 #include <sys/types.h>
+#if !defined(__APPLE__)
 #include <sys/mtio.h>
+#endif
 
 #include <err.h>
 #include <errno.h>
@@ -154,7 +156,9 @@ pos_in(void)
 void
 pos_out(void)
 {
+	#if !defined(__APPLE__)
 	struct mtop t_op;
+	#endif
 	off_t cnt;
 	ssize_t n;
 
@@ -170,6 +174,7 @@ pos_out(void)
 			err(1, "%s", out.name);
 		return;
 	}
+	#if !defined(__APPLE__)
 
 	/* Don't try to read a really weird amount (like negative). */
 	if (out.offset < 0)
@@ -212,4 +217,5 @@ pos_out(void)
 		}
 		break;
 	}
+	#endif
 }

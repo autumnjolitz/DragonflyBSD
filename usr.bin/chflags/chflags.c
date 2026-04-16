@@ -167,6 +167,7 @@ main(int argc, char *argv[])
 			newflags = (p->fts_statp->st_flags | set) & clear;
 		if (newflags == p->fts_statp->st_flags)
 			continue;
+		#if !defined(__APPLE__)
 		if (chflagsat(AT_FDCWD, p->fts_accpath, newflags,
 		    atflag) == -1 && !fflag) {
 			warn("%s", p->fts_path);
@@ -179,6 +180,7 @@ main(int argc, char *argv[])
 				    newflags);
 			printf("\n");
 		}
+		#endif
 	}
 	if (errno)
 		err(1, "fts_read");

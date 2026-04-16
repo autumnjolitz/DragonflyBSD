@@ -24,6 +24,13 @@
 #include <fnmatch.h>
 #include <assert.h>
 
+#if defined(__APPLE__)
+#define st_mtim st_mtimespec
+#define st_ctim st_ctimespec
+#define st_atim st_atimespec
+#endif
+
+
 /*
  * See ./mklinux script
  *

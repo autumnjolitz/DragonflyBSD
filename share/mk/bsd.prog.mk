@@ -26,6 +26,15 @@ LDFLAGS+= -static
 PROG=	${PROG_CXX}
 .endif
 
+.if !empty(EXTRA_LDFLAGS)
+LDFLAGS+= ${EXTRA_LDFLAGS}
+.endif
+
+.if !empty(EXTRA_LDADD)
+LDADD+= ${EXTRA_LDADD}
+.endif
+
+
 .if defined(PROG)
 .if defined(SRCS)
 

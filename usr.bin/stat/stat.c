@@ -83,7 +83,7 @@
 #define SHELL_B
 #endif /* HAVE_STRUCT_STAT_ST_BIRTHTIME */
 
-#if HAVE_STRUCT_STAT_ST_ATIM
+#if HAVE_STRUCT_STAT_ST_ATIM && !defined(__APPLE__)
 #define st_atimespec st_atim
 #define st_ctimespec st_ctim
 #define st_mtimespec st_mtim

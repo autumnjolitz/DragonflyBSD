@@ -57,6 +57,14 @@
 
 #include "find.h"
 
+#if defined(__APPLE__)
+#define st_atim st_atimespec
+#define st_ctim st_ctimespec
+#define st_mtim st_mtimespec
+#endif
+
+
+
 static PLAN *palloc(OPTION *);
 static long long find_parsenum(PLAN *, const char *, char *, char *);
 static long long find_parsetime(PLAN *, const char *, char *);

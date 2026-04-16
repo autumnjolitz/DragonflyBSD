@@ -980,7 +980,7 @@ InitVarMachine(const struct utsname *utsname MAKE_ATTR_UNUSED)
 #elif defined(MAKE_MACHINE)
 	return MAKE_MACHINE;
 #else
-	return "unknown";
+	return "unknown-machine";
 #endif
 #endif
 }
@@ -1016,7 +1016,7 @@ InitVarMachineArch(void)
 #elif defined(MAKE_MACHINE_ARCH)
 	return MAKE_MACHINE_ARCH;
 #else
-	return "unknown";
+	return "unknown-arch";
 #endif
 #endif
 }

@@ -90,14 +90,14 @@
 /*
  * Static once initialization values.
  */
-#define	PTHREAD_ONCE_INIT	{ PTHREAD_NEEDS_INIT, NULL }
+#define	PTHREAD_ONCE_INIT	{ PTHREAD_NEEDS_INIT, {0} }
 
 /*
  * Static initialization values.
  */
-#define	PTHREAD_MUTEX_INITIALIZER	NULL
-#define	PTHREAD_COND_INITIALIZER	NULL
-#define	PTHREAD_RWLOCK_INITIALIZER	NULL
+#define	PTHREAD_MUTEX_INITIALIZER	{0}
+#define	PTHREAD_COND_INITIALIZER	{0}
+#define	PTHREAD_RWLOCK_INITIALIZER	{0}
 
 /*
  * Default attribute arguments (draft 4, deprecated).

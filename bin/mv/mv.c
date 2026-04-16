@@ -49,7 +49,9 @@
 #include <string.h>
 #include <sysexits.h>
 #include <unistd.h>
-
+#if defined(__APPLE__)
+#define _PATH_CP			"cp"
+#endif
 /* Exit code for a failed exec. */
 #define EXEC_FAILED 127
 

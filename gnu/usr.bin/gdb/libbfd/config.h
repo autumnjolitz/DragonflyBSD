@@ -151,8 +151,9 @@
 /* #undef HAVE_PRPSINFO32_T_PR_PID */
 
 /* Define if <sys/procfs.h> has prpsinfo_t. */
+#ifndef __APPLE__
 #define HAVE_PRPSINFO_T 1
-
+#endif
 /* Define if <sys/procfs.h> has prpsinfo_t.pr_pid. */
 /* #undef HAVE_PRPSINFO_T_PR_PID */
 
@@ -163,7 +164,9 @@
 /* #undef HAVE_PRSTATUS32_T_PR_WHO */
 
 /* Define if <sys/procfs.h> has prstatus_t. */
+#if !defined(__APPLE__)
 #define HAVE_PRSTATUS_T 1
+#endif
 
 /* Define if <sys/procfs.h> has prstatus_t.pr_who. */
 /* #undef HAVE_PRSTATUS_T_PR_WHO */
@@ -228,7 +231,9 @@
 /* #undef HAVE_SYS_NDIR_H */
 
 /* Define to 1 if you have the <sys/procfs.h> header file. */
+#if !defined(__APPLE__)
 #define HAVE_SYS_PROCFS_H 1
+#endif
 
 /* Define to 1 if you have the <sys/stat.h> header file. */
 #define HAVE_SYS_STAT_H 1

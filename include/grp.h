@@ -61,20 +61,20 @@ struct group {
 };
 
 __BEGIN_DECLS
-#if __POSIX_VISIBLE >= 200112 || __XSI_VISIBLE
+#if __POSIX_VISIBLE >= 200112 || defined(__XSI_VISIBLE) || defined(__APPLE__)
 void		 endgrent(void);
 struct group	*getgrent(void);
 #endif
 struct group	*getgrgid(gid_t);
 struct group	*getgrnam(const char *);
-#if __BSD_VISIBLE
+#if defined(__BSD_VISIBLE) || defined(__APPLE__)
 const char	*group_from_gid(gid_t, int);
 int		 gid_from_group(const char *, gid_t *);
 int		 pwcache_groupdb(int (*)(int), void (*)(void),
 		    struct group * (*)(const char *),
 		    struct group * (*)(gid_t));
 #endif
-#if __XSI_VISIBLE
+#if defined(__XSI_VISIBLE) || defined(__APPLE__)
 void		 setgrent(void);
 #endif
 #if __POSIX_VISIBLE >= 200112 || __XSI_VISIBLE
@@ -83,7 +83,7 @@ int		 getgrgid_r(gid_t, struct group *, char *, size_t,
 int		 getgrnam_r(const char *, struct group *, char *, size_t,
 		    struct group **);
 #endif
-#if __BSD_VISIBLE
+#if defined(__BSD_VISIBLE) || defined(__APPLE__)
 int		 getgrent_r(struct group *, char *, size_t, struct group **);
 int		 setgroupent(int);
 #endif
