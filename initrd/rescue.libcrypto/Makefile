@@ -37,6 +37,7 @@ CRUNCH_INTLIB_telnet= ${.CURDIR}/../../lib/libtelnet/libtelnet.a
 CRUNCH_SRCDIRS+= sbin
 CRUNCH_PATH_sbin= ${.CURDIR}/../..
 CRUNCH_PROGS_sbin=	\
+	fsck_hammer2	\
 	md5		\
 	hammer		\
 	hammer2		\
