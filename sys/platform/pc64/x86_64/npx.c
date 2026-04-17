@@ -51,6 +51,7 @@
 
 #include <sys/thread2.h>
 
+#include <machine/cpufunc.h>
 #include <machine/cputypes.h>
 #include <machine/frame.h>
 #include <machine/md_var.h>
@@ -71,9 +72,9 @@
 #define	fxrstor(addr)		__asm("fxrstor64 %0" : : "m" (*(addr)))
 #define	fxsave(addr)		__asm __volatile("fxsave64 %0" : "=m" (*(addr)))
 #define	ldmxcsr(csr)		__asm __volatile("ldmxcsr %0" : : "m" (csr))
-#define	start_emulating()	__asm("smsw %%ax; orb %0,%%al; lmsw %%ax" \
-				      : : "n" (CR0_TS) : "ax")
-#define	stop_emulating()	__asm("clts")
+
+#define	start_emulating()	load_cr0(rcr0() | CR0_TS)
+#define	stop_emulating()	clts()
 
 #ifndef CPU_DISABLE_AVX
 static inline void
