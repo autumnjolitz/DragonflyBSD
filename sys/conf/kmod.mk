@@ -157,9 +157,6 @@ CFLAGS+=	-DHAVE_KERNEL_OPTION_HEADERS -include ${KERNBUILDDIR}/opt_global.h
 .endif
 
 CFLAGS+=	${DEBUG_FLAGS}
-.if ${MACHINE_ARCH} == "x86_64"
-CFLAGS+=	-fno-omit-frame-pointer
-.endif
 
 .if defined(FIRMWS)
 #AWK=/usr/bin/awk
