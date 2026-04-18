@@ -980,7 +980,7 @@ InitVarMachine(const struct utsname *utsname MAKE_ATTR_UNUSED)
 #elif defined(MAKE_MACHINE)
 	return MAKE_MACHINE;
 #else
-	return "unknown-machine";
+	return "unknown";
 #endif
 #endif
 }
@@ -995,6 +995,12 @@ InitVarMachineArch(void)
 	if (env != NULL)
 		return env;
 
+#if defined(__APPLE__)
+	/* OSX HW_MACHINE_ARCH returns -1, so use HW_MACHINE
+	and chomp the arm64->arm 
+	*/
+CTASSERT(HW_MACHINE_ARCH == HW_MACHINE);
+#endif
 #if defined(MAKE_NATIVE) && defined(CTL_HW)
 	{
 		struct utsname utsname;
@@ -1008,6 +1014,13 @@ InitVarMachineArch(void)
 			    progname, strerror(errno));
 			exit(2);
 		}
+#if defined(__APPLE__)
+		/* ARJ: OSX returns arm64 but the expectation is arm,
+		so force it at all costs */
+		if (!memcmp(machine_arch_buf, "arm64", 5)) {
+			return "arm";
+		}
+#endif
 
 		return machine_arch_buf;
 	}
@@ -1016,7 +1029,7 @@ InitVarMachineArch(void)
 #elif defined(MAKE_MACHINE_ARCH)
 	return MAKE_MACHINE_ARCH;
 #else
-	return "unknown-arch";
+	return "unknown";
 #endif
 #endif
 }
