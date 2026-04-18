@@ -333,6 +333,9 @@ WORLD_ALTCOMPILER?= gcc120
 
 # Include global user settings.
 __MAKE_CONF?=/etc/make.conf
+.if defined(MAKE_CONF)
+__MAKE_CONF=${MAKE_CONF}
+.endif
 .if exists(${__MAKE_CONF})
 .include "${__MAKE_CONF}"
 .endif
