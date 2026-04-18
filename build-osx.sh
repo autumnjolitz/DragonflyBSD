@@ -216,6 +216,37 @@ EOF
 #endif
 EOF
 
+>include/libdarwin/c++/stddef.h cat <<EOF
+#if !defined(__cplusplus)
+#error "what are you doing with a c++ header?"
+#endif
+
+#ifdef LIBDARWIN_CXX_OVERLAY
+#if __has_include_next(<stddef.h>)
+#include_next <stddef.h>
+#endif
+#else
+#if __has_include(<stddef.h>)
+#include <stddef.h>
+#endif
+#endif
+
+#ifndef _LIBDARWIN_CXX_STDDEF_H_
+#define _LIBDARWIN_CXX_STDDEF_H_
+
+#if __cplusplus >= 201703L
+/*
+** Ensure that register is unset for c++17 and above.
+*/
+#ifdef register
+#undef register
+#endif
+#define register 
+#endif
+
+#endif
+EOF
+
 >include/libdarwin/stddef.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<stddef.h>)
@@ -229,13 +260,6 @@ EOF
 
 #ifndef _LIBDARWIN_STDDEF_H_
 #define _LIBDARWIN_STDDEF_H_
-
-#if defined(__cplusplus) && __cplusplus >= 201703L
-#ifdef register
-#undef register
-#endif
-#define register 
-#endif
 
 #endif
 EOF
