@@ -37,10 +37,6 @@ along with GCC; see the file COPYING3.  If not see
 
 #include <stdio.h>
 
-#ifndef _OVERLAY_STDIO_H_
-#error "bitch!"
-#endif
-
 #ifdef __cplusplus
 #include <new>
 #endif
