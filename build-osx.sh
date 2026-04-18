@@ -93,8 +93,8 @@ cp $SRC/etc/defaults/compilers.conf \
 #endif
 #endif
 
-#ifndef_LIBDARWIN_CXX_STDIO_H_
-#define_LIBDARWIN_CXX_STDIO_H_
+#ifndef _LIBDARWIN_CXX_STDIO_H_
+#define _LIBDARWIN_CXX_STDIO_H_
 
 #endif
 #endif
@@ -271,8 +271,8 @@ EOF
 #endif
 #endif
 
-#ifndef_LIBDARWIN_SYS_DEVICE_H_
-#define_LIBDARWIN_SYS_DEVICE_H_
+#ifndef _LIBDARWIN_SYS_DEVICE_H_
+#define _LIBDARWIN_SYS_DEVICE_H_
 #include <sys/ioctl.h>
 #ifndef D_MEM
 #define D_MEM 0
@@ -676,8 +676,8 @@ done
 #endif
 #endif
 
-#ifndef_LIBDARWIN_STRING_H_
-#define_LIBDARWIN_STRING_H_
+#ifndef _LIBDARWIN_STRING_H_
+#define _LIBDARWIN_STRING_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -710,8 +710,8 @@ EOF
 #endif
 #endif
 
-#ifndef_LIBDARWIN_STDIO_H_
-#define_LIBDARWIN_STDIO_H_
+#ifndef _LIBDARWIN_STDIO_H_
+#define _LIBDARWIN_STDIO_H_
 
 #ifdef __cplusplus
 extern "C" {
@@ -783,11 +783,39 @@ EOF
 #endif
 EOF
 
+>include/libdarwin/elf.h cat <<EOF
+#ifndef _LIBDARWIN_ELF_H_
+#define _LIBDARWIN_ELF_H_
+#include "$SRC/include/elf.h"
 
+#endif
+EOF
+>include/libdarwin/sys/elf32.h cat <<EOF
+#ifndef _LIBDARWIN_SYS_ELF32_H_
+#define _LIBDARWIN_SYS_ELF32_H_
+#include "$SRC/sys/sys/elf32.h"
+
+#endif
+EOF
+>include/libdarwin/sys/elf64.h cat <<EOF
+#ifndef _LIBDARWIN_SYS_ELF64_H_
+#define _LIBDARWIN_SYS_ELF64_H_
+#include "$SRC/sys/sys/elf64.h"
+
+#endif
+EOF
+
+>include/libdarwin/sys/elf_common.h cat <<EOF
+#ifndef _LIBDARWIN_SYS_ELF64_H_
+#define _LIBDARWIN_SYS_ELF64_H_
+#include "$SRC/sys/sys/elf_common.h"
+
+#endif
+EOF
 
 >include/libdarwin/machine/elf.h cat <<EOF
-#ifndef_LIBDARWIN_MACHINE_ELF_H_
-#define_LIBDARWIN_MACHINE_ELF_H_
+#ifndef _LIBDARWIN_MACHINE_ELF_H_
+#define _LIBDARWIN_MACHINE_ELF_H_
 
 #include "$SRC/sys/cpu/x86_64/include/elf.h"
 
@@ -795,7 +823,7 @@ EOF
 EOF
 
 >include/libdarwin/elf-hints.h cat <<EOF
-#ifndef_LIBDARWIN_ELF_HINTS_H_
+#ifndef _LIBDARWIN_ELF_HINTS_H_
 
 #include "$SRC/include/elf-hints.h"
 #undef HAVE_PRSTATUS_T
@@ -975,8 +1003,8 @@ EOF
 #endif
 #endif
 
-#ifndef_LIBDARWIN_PTHREAD_H_
-#define_LIBDARWIN_PTHREAD_H_
+#ifndef _LIBDARWIN_PTHREAD_H_
+#define _LIBDARWIN_PTHREAD_H_
 
 #endif
 EOF
@@ -997,8 +1025,8 @@ EOF
 #endif
 #endif
 
-#ifndef_LIBDARWIN_SYS_PTHREADTYPES_H_
-#define_LIBDARWIN_SYS_PTHREADTYPES_H_
+#ifndef _LIBDARWIN_SYS_PTHREADTYPES_H_
+#define _LIBDARWIN_SYS_PTHREADTYPES_H_
 #include <sys/_pthread/_pthread_types.h>
 #include <sys/_pthread/_pthread_attr_t.h>
 #include <sys/_pthread/_pthread_cond_t.h>
@@ -1026,8 +1054,8 @@ EOF
 #endif
 #endif
 
-#ifndef_LIBDARWIN_SYS_SCHED_H_
-#define_LIBDARWIN_SYS_SCHED_H_
+#ifndef _LIBDARWIN_SYS_SCHED_H_
+#define _LIBDARWIN_SYS_SCHED_H_
 #endif
 EOF
 
@@ -1042,8 +1070,8 @@ EOF
 #endif
 #endif
 
-#ifndef_LIBDARWIN_SYS_CPUMASK_H_
-#define_LIBDARWIN_SYS_CPUMASK_H_
+#ifndef _LIBDARWIN_SYS_CPUMASK_H_
+#define _LIBDARWIN_SYS_CPUMASK_H_
 #include <sys/cdefs.h>
 typedef struct {
     __uint64_t  ary[4];
@@ -1073,8 +1101,8 @@ EOF
 #   endif
 #endif
 
-#ifndef_LIBDARWIN_SYS_LIMIT_H_
-#define_LIBDARWIN_SYS_LIMIT_H_
+#ifndef _LIBDARWIN_SYS_LIMIT_H_
+#define _LIBDARWIN_SYS_LIMIT_H_
 #endif
 EOF
 
@@ -1707,7 +1735,7 @@ rm -f lib/*.o
 #endif
 #endif
 
-#ifndef_LIBDARWIN_SYS_QUEUE_H_
+#ifndef _LIBDARWIN_SYS_QUEUE_H_
 #include "$SRC/sys/sys/queue.h"
 
 #endif
