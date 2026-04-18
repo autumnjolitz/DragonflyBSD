@@ -783,6 +783,17 @@ EOF
 #endif
 EOF
 
+
+
+>include/libdarwin/machine/elf.h cat <<EOF
+#ifndef _OVERLAY_MACHINE_ELF_H_
+#define _OVERLAY_MACHINE_ELF_H_
+
+#include "$SRC/sys/cpu/x86_64/include/elf.h"
+
+#endif
+EOF
+
 >include/libdarwin/elf-hints.h cat <<EOF
 #ifndef _OVERLAY_ELF_HINTS_H_
 
