@@ -57,6 +57,14 @@ PRIVATELIB_LDFLAGS?=	-rpath /lib/priv -L ${_SHLIBDIRPREFIX}/usr/lib/priv
 PICFLAG=-fpic
 .endif
 
+.if !empty(EXTRA_LDFLAGS)
+LDFLAGS+= ${EXTRA_LDFLAGS}
+.endif
+
+.if !empty(EXTRA_LDADD)
+LDADD+= ${EXTRA_LDADD}
+.endif
+
 PO_FLAG=-pg
 PO_CFLAGS=${CFLAGS:N-ffunction-sections}
 PO_CXXFLAGS=${CXXFLAGS:N-ffunction-sections}
