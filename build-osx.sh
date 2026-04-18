@@ -24,6 +24,7 @@ if [ -z "$SDK" ] ; then
         ; do
         if [ -d "$maybe_sdk" ]; then
             SDK="$maybe_sdk"
+            >&2 printf 'info: selected "%s" as SDK\n' "$SDK"
             break
         fi
     done
@@ -59,18 +60,47 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+LOGFILE="$OPWD/bw.out"
+_log=">${LOGFILE} 2>&1"
+_background='&'
+if [ $_verbose -gt 0 ]; then
+    _log=
+    _background=
+fi
+
+
 if [ ! -d "$MAKEOBJDIRPREFIX" ]; then
     mkdir -p "$MAKEOBJDIRPREFIX"
 fi
 
-D="$(mktemp -d /tmp/dragonfly-buildroot.XXXX)"
-cd "$D"
+CLEAN_BUILDROOT="${CLEAN_BUILDROOT:-}"
+BUILDROOT="${BUILDROOT:-}"
+if [ ! -n "$BUILDROOT" ]; then
+	if [ ! -n "$CLEAN_BUILDROOT" ]; then
+		CLEAN_BUILDROOT=1
+	fi
+	BUILDROOT="$(mktemp -d /tmp/dragonfly-buildroot.XXXX)"
+fi
+if [ ! -n "$CLEAN_BUILDROOT" ]; then
+	CLEAN_BUILDROOT=0
+fi
+
+cd "$BUILDROOT"
 
 cleanup() {
-    rm -rf "$D"
+	if [ "$CLEAN_BUILDROOT" -eq 1 ]; then
+		if [ "$_verbose" -gt 1 ]; then
+			>&2 printf 'debug: Removing temporary BUILDROOT at "%s"\n' "$BUILDROOT"
+		fi
+	    rm -rf "$BUILDROOT"
+	fi
 }
 
 trap cleanup EXIT
+
+if [ "$CLEAN_BUILDROOT" -eq 1 ] && [ "$_verbose" -gt 1 ]; then
+	>&2 printf 'debug: will remove BUILDROOT when ended.\n'
+fi
 
 mkdir -p \
     bin \
@@ -83,7 +113,7 @@ cp $SRC/etc/defaults/compilers.conf \
 
 >include/libdarwin/c++/stdio.h cat <<EOF
 #ifdef __cplusplus
-#ifdef LIBDARWIN_OVERLAY
+#ifdef LIBDARWIN_CXX_OVERLAY
 #if __has_include_next(<stdio.h>)
 #include_next <stdio.h>
 #endif
@@ -143,6 +173,16 @@ int getosreldate(void) {
     return __DragonFly_version;
 };
 
+
+const unsigned char __gmpn_clz_tab[128] =
+{
+  1,2,3,3,4,4,4,4,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+  7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+  8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,
+  8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8
+};
+
+const unsigned char* mpfr_clz_tab = __gmpn_clz_tab;
 EOF
 
 
@@ -172,6 +212,30 @@ EOF
 
 #ifndef _FTS_H_
 #define _FTS_H_
+
+#endif
+EOF
+
+>include/libdarwin/stddef.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<stddef.h>)
+#include_next <stddef.h>
+#endif
+#else
+#if __has_include(<stddef.h>)
+#include <stddef.h>
+#endif
+#endif
+
+#ifndef _LIBDARWIN_STDDEF_H_
+#define _LIBDARWIN_STDDEF_H_
+
+#if defined(__cplusplus) && __cplusplus >= 201703L
+#ifdef register
+#undef register
+#endif
+#define register 
+#endif
 
 #endif
 EOF
@@ -523,9 +587,7 @@ EOF
 #define __BSD_VISIBLE       1
 #define __ISO_C_VISIBLE     2011
 #define __EXT1_VISIBLE      1
-// ARJ: disabled as OSX defines HW_MACHINE_ARCH but it
-// returns ENOENT lmao
-/* #define HAVE_SYSCTL 1 */
+#define HAVE_SYSCTL 1
 
 #ifndef __GNUC_PREREQ__
 # define __GNUC_PREREQ__(ma, mi) __GNUC_PREREQ(ma, mi)
@@ -584,6 +646,9 @@ EOF
 
 #define __unreachable() __builtin_unreachable()
 #define __LONG_LONG_SUPPORTED
+
+#define	__CONCAT1(x,y)	x ## y
+#define	__CONCAT(x,y)	__CONCAT1(x,y)
 
 /*
 ** c++ provides __restrict, while c provides restrict.
@@ -699,6 +764,151 @@ char *stpcpy(char * restrict dst, const char * restrict src);
 #endif
 EOF
 
+
+>include/libdarwin/sys/sysctl.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<sys/sysctl.h>)
+#include_next <sys/sysctl.h>
+#endif
+#else
+#if __has_include(<sys/sysctl.h>)
+#include <sys/sysctl.h>
+#endif
+#endif
+
+#if !defined(_LIBDARWIN_SYS_SYSCTL_)
+#define _LIBDARWIN_SYS_SYSCTL_
+#if defined(__APPLE__)
+/*
+** HW_MACHINE_ARCH is unsupported on OSX, returns -1.
+** of note, hw.optional.arm64=1 appears on arm64 OSX/ios,
+**          hw.optional.x86_64=1 appears on x86-64 OSX/ios,
+*/
+#if defined(HW_MACHINE_ARCH)
+#warning "HW_MACHINE_ARCH always returns -1, so use HW_MACHINE instead"
+#define HW_MACHINE_ARCH 	HW_MACHINE
+#endif
+#endif
+#endif
+EOF
+
+>include/libdarwin/c++/locale cat <<EOF
+/*
+** ARJ: so safe-ctype conflicts with llvm@21
+**      c++ b/c the macro redefinition of isspace, et al
+**      causes the inline of isspace in <locale> to fail.
+*/
+#if !defined(__cplusplus)
+#error "this is a c++ header, why is __cplusplus missing?"
+#endif
+
+#if defined(SAFE_CTYPE_H)
+#warning "detected legacy gcc safe-ctype.h - this implementation clobbers several std::space, et al functions via the preprocessor! Let's remove them before include_next'ing ours!!;)"
+#ifdef isspace
+#undef isspace
+#endif
+#ifdef isprint
+#undef isprint
+#endif
+#ifdef iscntrl
+#undef iscntrl
+#endif
+#ifdef isupper
+#undef isupper
+#endif
+#ifdef islower
+#undef islower
+#endif
+#ifdef isalpha
+#undef isalpha
+#endif
+#ifdef isdigit
+#undef isdigit
+#endif
+#ifdef ispunct
+#undef ispunct
+#endif
+#ifdef isxdigit
+#undef isxdigit
+#endif
+#ifdef isalnum
+#undef isalnum
+#endif
+#ifdef isgraph
+#undef isgraph
+#endif
+#ifdef toupper
+#undef toupper
+#endif
+#ifdef tolower
+#undef tolower
+#endif
+#endif
+
+#ifdef LIBDARWIN_CXX_OVERLAY
+#if __has_include_next(<locale>)
+#include_next <locale>
+#endif
+#else
+#if __has_include(<locale>)
+#include <locale>
+#endif
+#endif
+
+#if !defined(_LIBDARWIN_CXX_LOCALE_)
+#define _LIBDARWIN_CXX_LOCALE_
+
+#endif
+EOF
+
+>include/libdarwin/sys/types.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<sys/types.h>)
+#include_next <sys/types.h>
+#endif
+#else
+#if __has_include(<sys/types.h>)
+#include <sys/types.h>
+#endif
+#endif
+
+#ifndef _LIBDARWIN_SYS_TYPES_H_
+#define _LIBDARWIN_SYS_TYPES_H_
+
+#endif
+
+EOF
+
+>include/libdarwin/fcntl.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<fcntl.h>)
+#include_next <fcntl.h>
+#endif
+#else
+#if __has_include(<fcntl.h>)
+#include <fcntl.h>
+#endif
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef _LIBDARWIN_FCNTL_H_
+#define _LIBDARWIN_FCNTL_H_
+
+#if !defined(O_CLOFORK) && defined(__APPLE__)
+#define O_CLOFORK       0x08000000
+#endif
+
+int posix_fallocate(int fd, off_t offset, off_t len);
+
+#endif
+#ifdef __cplusplus
+}
+#endif
+EOF
+
 >include/libdarwin/stdio.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<stdio.h>)
@@ -783,6 +993,93 @@ EOF
 #endif
 EOF
 
+>include/libdarwin/sys/resident.h cat <<EOF
+#ifndef _LIBDARWIN_SYS_RESIDENT_H_
+#define _LIBDARWIN_SYS_RESIDENT_H_
+
+
+#endif
+EOF
+>include/libdarwin/machine/setjmp.h cat <<EOF
+#ifndef _LIBDARWIN_MACHINE_SETJMP_H_
+#define _LIBDARWIN_MACHINE_SETJMP_H_
+
+#if defined(__x86_64__)
+/*
+ * _JBLEN is number of ints required to save the following:
+ * rflags, rip, rbp, rsp, rbx, r12, r13, r14, r15... these are 8 bytes each
+ * mxcsr, fp control word, sigmask... these are 4 bytes each
+ * add 16 ints for future expansion needs...
+ */
+#define _JBLEN ((9 * 2) + 3 + 16)
+typedef int jmp_buf[_JBLEN];
+typedef int sigjmp_buf[_JBLEN + 1];
+#elif defined(__arm64__)
+#define _JBLEN          ((14 + 8 + 2) * 2)
+
+typedef int jmp_buf[_JBLEN];
+typedef int sigjmp_buf[_JBLEN + 1];
+
+#else
+#error "lol"
+#endif
+#endif
+EOF
+>include/libdarwin/setjmp.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<setjmp.h>)
+#include_next <setjmp.h>
+#endif
+#else
+#if __has_include(<setjmp.h>)
+#include <setjmp.h>
+#endif
+#endif
+
+#ifndef _LIBDARWIN_SETJMP_H_
+#define _LIBDARWIN_SETJMP_H_
+#endif
+EOF
+>include/libdarwin/sys/tls.h cat <<EOF
+#ifndef _LIBDARWIN_SYS_TLS_H_
+#define _LIBDARWIN_SYS_TLS_H_
+
+
+#endif
+EOF
+>include/libdarwin/machine/tls.h cat <<EOF
+#ifndef _LIBDARWIN_MACHINE_TLS_H_
+#define _LIBDARWIN_MACHINE_TLS_H_
+
+
+#endif
+EOF
+
+>include/libdarwin/sys/ktrace.h cat <<EOF
+#ifndef _LIBDARWIN_SYS_KTRACE_H_
+#define _LIBDARWIN_SYS_KTRACE_H_
+#define utrace(x, y) -1
+
+#endif
+EOF
+
+>include/libdarwin/link.h cat <<EOF
+#ifndef _LIBDARWIN_LINK_H_
+#define _LIBDARWIN_LINK_H_
+#include "$SRC/include/link.h"
+
+#endif
+EOF
+
+>include/libdarwin/sys/link_elf.h cat <<EOF
+#ifndef _LIBDARWIN_SYS_LINK_ELF_H_
+#define _LIBDARWIN_SYS_LINK_ELF_H_
+#include "$SRC/sys/sys/link_elf.h"
+
+#endif
+EOF
+
+
 >include/libdarwin/elf.h cat <<EOF
 #ifndef _LIBDARWIN_ELF_H_
 #define _LIBDARWIN_ELF_H_
@@ -790,6 +1087,14 @@ EOF
 
 #endif
 EOF
+>include/libdarwin/sys/elf_generic.h cat <<EOF
+#ifndef _LIBDARWIN_SYS_ELF_GENERIC_H_
+#define _LIBDARWIN_SYS_ELF_GENERIC_H_
+#include "$SRC/sys/sys/elf_generic.h"
+
+#endif
+EOF
+
 >include/libdarwin/sys/elf32.h cat <<EOF
 #ifndef _LIBDARWIN_SYS_ELF32_H_
 #define _LIBDARWIN_SYS_ELF32_H_
@@ -797,17 +1102,18 @@ EOF
 
 #endif
 EOF
+
 >include/libdarwin/sys/elf64.h cat <<EOF
+
 #ifndef _LIBDARWIN_SYS_ELF64_H_
 #define _LIBDARWIN_SYS_ELF64_H_
 #include "$SRC/sys/sys/elf64.h"
-
 #endif
 EOF
 
 >include/libdarwin/sys/elf_common.h cat <<EOF
-#ifndef _LIBDARWIN_SYS_ELF64_H_
-#define _LIBDARWIN_SYS_ELF64_H_
+#ifndef _LIBDARWIN_SYS_ELF_COMMON_H_
+#define _LIBDARWIN_SYS_ELF_COMMON_H_
 #include "$SRC/sys/sys/elf_common.h"
 
 #endif
@@ -842,8 +1148,8 @@ EOF
 #endif
 #endif
 
-#ifndef _SYS_TIMESPEC_H_
-#define _SYS_TIMESPEC_H_
+#ifndef _SYS__TIMESPEC_H_
+#define _SYS__TIMESPEC_H_
 #include <sys/_types/_time_t.h>
 #include <sys/_types/_timespec.h>
 #endif
@@ -1388,11 +1694,6 @@ EOF
 #include <unistd.h>
 #include <fcntl.h>
 #include <string.h>
-#include <sys/fcntl.h>
-
-#if !defined(O_CLOFORK) && defined(__APPLE__)
-#define O_CLOFORK       0x08000000
-#endif
 
 int pipe2(int fildes[2], int flags) {
     memset((int*)fildes, '\0', sizeof(int)*2);
@@ -1419,7 +1720,7 @@ EOF
 #include <string.h>
 
 char *stpcpy(char * restrict dst, const char * restrict src) {
-    return __builtin___stpcpy_chk(dst, src, strlen(dst));
+    return __builtin___stpcpy_chk(dst, src, strlen(src));
 };
 
 EOF
@@ -1462,6 +1763,34 @@ int fputc_unlocked(int c, FILE *stream) {
 int fflush_unlocked(FILE *stream) {
 	return fflush(stream);
 }
+EOF
+
+>posix_fallocate.c cat <<EOF
+#include <fcntl.h>
+#include <unistd.h>
+#include <errno.h>
+
+int posix_fallocate(int fd, off_t offset, off_t length) {
+	fstore_t req = {
+		F_ALLOCATECONTIG | F_ALLOCATEALL, F_PEOFPOSMODE, offset, length, 0
+	};
+	// please preallocate this space:
+	int rc = fcntl(fd, F_PREALLOCATE, &req);
+	if(rc == -1) {
+		// please try to get me *some* space?
+		req.fst_flags = F_ALLOCATEALL;
+		rc = fcntl(fd, F_PREALLOCATE, &req);
+		if (rc == -1) {
+			rc = errno;
+			return rc;
+		}
+	}
+	rc = ftruncate(fd, length);
+	if (rc == -1) {
+		rc = errno;
+	}
+	return rc;
+};
 
 EOF
 
@@ -1614,94 +1943,162 @@ done
 exec /usr/bin/ld $(printf '%s\n' "$args" | tr '\n' ' ')
 EOF
 chmod +x bin/ld
-
+LIBDARWIN_CXXFLAGS=\
+"-cxx-isystem $BUILDROOT/include/libdarwin/c++ "\
+"-DLIBDARWIN_CXX_OVERLAY"
 LIBDARWIN_CFLAGS=\
-"-cxx-isystem $D/include/libdarwin/c++ "\
-"-isystem $D/include/libdarwin "\
+"-isystem $BUILDROOT/include/libdarwin "\
 "-DLIBDARWIN_OVERLAY"
-LIBDARWIN_LDFLAGS="-L$D/lib -lDarwin"
-
+LIBDARWIN_LDFLAGS="-L$BUILDROOT/lib -lDarwin"
+_CFLAGS='-fPIC -g'
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     pthread_barrier.c \
     -o lib/pthread_barrier.o
 
 
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     fpending.c \
     -o lib/fpending.o
 
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     string.c \
     -o lib/string.o
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     pipe2.c \
     -o lib/pipe2.o
 
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     file.c \
     -o lib/file.o
 
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     eaccess.c \
     -o lib/eaccess.o
 
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     pthread_spinlock.c \
     -o lib/pthread_spinlock.o
 
 ${CLANG_HOME}/bin/clang \
-    -I "$D/include" \
+    -I "$BUILDROOT/include" \
     -D LIBDARWIN_OVERLAY \
-    -c \
+    -c ${_CFLAGS} \
     varsym_shim.c \
     -o lib/varsym_shim.o
-${CLANG_HOME}/bin/clang -c \
+${CLANG_HOME}/bin/clang -c ${_CFLAGS} \
     $SRC/lib/libc/net/base64.c \
     -o lib/base64.o
-${CLANG_HOME}/bin/clang -c \
+${CLANG_HOME}/bin/clang -c ${_CFLAGS} \
     $SRC/lib/libc/string/memchr.c \
     -o lib/memchr.o
-${CLANG_HOME}/bin/clang -c \
+${CLANG_HOME}/bin/clang -c ${_CFLAGS} \
     $SRC/lib/libc/string/mempcpy.c \
     -o lib/mempcpy.o
-${CLANG_HOME}/bin/clang -c \
+${CLANG_HOME}/bin/clang -c ${_CFLAGS} \
     $SRC/lib/libc/string/memrchr.c \
     -o lib/memrchr.o
-${CLANG_HOME}/bin/clang -c \
+${CLANG_HOME}/bin/clang -c ${_CFLAGS} \
     $SRC/lib/libc/stdlib/reallocarray.c \
     -o lib/reallocarray.o
-${CLANG_HOME}/bin/clang -c \
+${CLANG_HOME}/bin/clang -c ${_CFLAGS} \
     yywrap.c \
     -o lib/yywrap.o
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     assert.c \
     -o lib/assert.o
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     _init.c \
     -o lib/_init.o
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
-    -c \
+    -c ${_CFLAGS} \
     $SRC/lib/libc/gen/getobjformat.c \
     -o lib/getobjformat.o
+
+>rtld.c cat <<EOF
+#include <link.h>
+#include "rtld.h"
+
+static const Obj_Entry *rtld_functrace_obj;	/* Object thereof */
+static Obj_Entry *obj_list;	/* Head of linked list of shared objects */
+static Obj_Entry **obj_tail;	/* Link field of last object in list */
+static Obj_Entry **preload_tail;
+static Obj_Entry *obj_main;	/* The main program shared object */
+static Obj_Entry obj_rtld;	/* The dynamic linker shared object */
+static unsigned int obj_count;	/* Number of objects in obj_list */
+static unsigned int obj_loads;	/* Number of objects in obj_list */
+
+static void
+rtld_fill_dl_phdr_info(const Obj_Entry *obj, struct dl_phdr_info *phdr_info)
+{
+
+	phdr_info->dlpi_addr = (Elf_Addr)obj->relocbase;
+	phdr_info->dlpi_name = obj->path;
+	phdr_info->dlpi_phdr = obj->phdr;
+	phdr_info->dlpi_phnum = obj->phsize / sizeof(obj->phdr[0]);
+	phdr_info->dlpi_tls_modid = obj->tlsindex;
+	phdr_info->dlpi_tls_data = obj->tlsinit;
+	phdr_info->dlpi_adds = obj_loads;
+	phdr_info->dlpi_subs = obj_loads - obj_count;
+}
+
+int dl_iterate_phdr(__dl_iterate_hdr_callback callback, void *param)
+{
+    struct dl_phdr_info phdr_info;
+    const Obj_Entry *obj;
+    int error;
+
+    error = 0;
+
+    for (obj = obj_list;  obj != NULL;  obj = obj->next) {
+		rtld_fill_dl_phdr_info(obj, &phdr_info);
+		if ((error = callback(&phdr_info, sizeof phdr_info, param)) != 0)
+			break;
+    }
+    if (error == 0) {
+		rtld_fill_dl_phdr_info(&obj_rtld, &phdr_info);
+		error = callback(&phdr_info, sizeof(phdr_info), param);
+    }
+    return (error);
+}
+
+EOF
+
+${CLANG_HOME}/bin/clang \
+    $LIBDARWIN_CFLAGS \
+    -I$SRC/lib/csu/common \
+    -I$SRC/libexec/rtld-elf/x86_64 \
+    -I$SRC/libexec/rtld-elf \
+    -I$SRC/include \
+    -c ${_CFLAGS} \
+    rtld.c \
+    -o lib/rtld.o
+
+${CLANG_HOME}/bin/clang \
+    $LIBDARWIN_CFLAGS \
+    -c ${_CFLAGS} \
+    posix_fallocate.c  \
+    -o lib/posix_fallocate.o
+
+unset _CFLAGS
 
 ar rvs $PWD/lib/libDarwin.a \
         lib/_init.o \
@@ -1720,7 +2117,9 @@ ar rvs $PWD/lib/libDarwin.a \
         lib/string.o \
         lib/eaccess.o \
         lib/assert.o \
-        lib/file.o
+        lib/file.o \
+        lib/rtld.o \
+        lib/posix_fallocate.o
 
 rm -f lib/*.o
 
@@ -1745,7 +2144,8 @@ IGNORE_WARNINGS="-Wno-macro-redefined -Wno-nullability-completeness"
 EXTRA_CFLAGS="${IGNORE_WARNINGS} "\
 "${LIBDARWIN_CFLAGS} "\
 "$(pkg-config --cflags libbsd-overlay)"
-EXTRA_CXXFLAGS=
+EXTRA_CXXFLAGS=\
+"${LIBDARWIN_CXXFLAGS} "
 # "-L${CLANG_HOME}/lib/c++ -L${CLANG_HOME}/lib/unwind -lunwind"
 
 
@@ -1775,7 +2175,7 @@ EOF
         -e 's|@@INCPREFIX@@|/|g' \
         -e 's|@@MACHARCH@@|x86_64|g' \
         -e 's|@@MACHREL@@|6.5|g' \
-        -e 's|/etc|'"$D/etc"'|g' \
+        -e 's|/etc|'"$BUILDROOT/etc"'|g' \
         $SRC/libexec/customcc/cc.sh
 chmod +x bin/cc.sh
 for item in cpp c++ gcc g++ clang-cpp clang++ clang gcov CC
@@ -1799,6 +2199,7 @@ cp $SRC/etc/defaults/make.conf etc/make.conf
 
 >> etc/make.conf <<'EOF'
 CFLAGS+=-Wno-nullability-completeness
+
 EOF
 
 chmod +x bin/yacc
@@ -1806,7 +2207,7 @@ chmod +x bin/yacc
 ln -sf "$(command -v make)"     bin/gmake
 ln -sf "$(command -v bmake)"    bin/make
 
-export PATH="${D}/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="$BUILDROOT/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 > bin/mtree cat << 'EOF'
 #!/usr/bin/env sh
@@ -1840,48 +2241,55 @@ install -m0755 \
     bin/mkdep
 
 if [ "${1:-}" = '' ]; then
-    set -- "crossworld"
+    set -- "buildworld"
 fi
 
-LOGFILE="$OPWD/bw.out"
-_log=">${LOGFILE} 2>&1"
-_background='&'
-if [ $_verbose -gt 0 ]; then
-    _log=
-    _background=
-fi
 rm -f "$LOGFILE" || true
+
 t_s="$(date +%s)"
 rc=0
 
-start-build() {
+EXTRA_LDADD=\
+"$(pkg-config --libs libbsd-overlay) "\
+"${LIBDARWIN_LDFLAGS} "\
+"-Wl,-flat_namespace "
+# OSX basically hates static linking.
+# if you can show you've got the crt1.o and friends,
+# then add `-static` to STATIC_LDFLAGS (or just remove NXLDFLAGS declaration entirely!)
+STATIC_LDFLAGS='${LDFLAGS} -Wl,-all_load'
+printf "Setting STATIC_LDFLAGS=%s\nSetting {EXTRA_LDADD, NXLDLIBS} = %s\n" \
+	"$STATIC_LDFLAGS" \
+	"$EXTRA_LDADD"
+
+start_build () {
+	if [ "$EXTRA_LDADD" = '' ]; then
+		>&2 printf 'wtf - EXTRA_LDADD is empty!\n'
+		return 55
+	fi
     env \
-    MAKEOBJDIRPREFIX="$MAKEOBJDIRPREFIX" \
-    __MAKE_CONF=$D/etc/make.conf \
-    MACHINE_PLATFORM=pc64 \
-    HOST_BINUTILSVER=binutils234 \
-    bmake \
-        -e \
-        -C "$SRC" \
-        BUILD_ARCH=arm64 \
-        HOST_CCVER=clang21 \
-        CCVER=clang21 \
-        NOSHARED=NO \
-        TARGET_ARCH=x86_64 \
-        TARGET_PLATFORM=pc64 \
-        CC="$D/bin/cc" \
-        CXX="$D/bin/c++" \
-        _HOSTPATH="${D}/bin:${PATH}" \
-        NXPATH='${_HOSTPATH}' \
-        NXLDFLAGS='${LDFLAGS}' \
-        NXLDLIBS+="$(pkg-config --libs libbsd-overlay) ${LIBDARWIN_LDFLAGS}" \
-        EXTRA_LDADD+="$(pkg-config --libs libbsd-overlay) ${LIBDARWIN_LDFLAGS}" \
-        "$make_args"
+	    MAKEOBJDIRPREFIX="$MAKEOBJDIRPREFIX" \
+	    HOST_BINUTILSVER=binutils234 \
+	    MAKE_CONF=$BUILDROOT/etc/make.conf \
+		bmake \
+		    -e \
+		    -C "$SRC" \
+		    TARGET_ARCH=x86_64 \
+		    CC="$BUILDROOT/bin/cc" \
+		    CXX="$BUILDROOT/bin/c++" \
+		    HOST_CCVER=clang21 \
+		    CCVER=clang21 \
+		    NOSHARED=NO \
+		    _HOSTPATH="$BUILDROOT/bin:${PATH}" \
+		    NXPATH='${_HOSTPATH}' \
+		    NXLDFLAGS="$STATIC_LDFLAGS" \
+		    NXLDLIBS+="$EXTRA_LDADD" \
+		    EXTRA_LDADD+="$EXTRA_LDADD" \
+		    "$make_args"
 }
 
 
 
-eval "${_log}" start-build \
+eval "${_log}" start_build \
      "${_background}" || rc="$?"
 
 if [ "${_background}" != '' ]; then
@@ -1893,7 +2301,7 @@ if [ "${_background}" != '' ]; then
 fi
 
 if [ $rc -ne 0 ]; then
-    if [ ! -z "$_log" ]; then
+    if [ ! -z "${_log}" ]; then
         >&2 printf 'examine log at: %s\n' "$LOGFILE"
     fi
     exit $rc
