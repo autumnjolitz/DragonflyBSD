@@ -76,7 +76,7 @@ gencfn-macros.nx: hash-table.no vec.no ggc-none.no
 .for f in ${GENTOOLS}
 $f: ${f:.nx=.no} ${BUILD_LIBS_${f:R}} ${BUILD_LIBS}
 	${NXCXX} ${NXCXXFLAGS:N-flto} ${NXLDFLAGS} ${.ALLSRC:M*.n[oa]} \
-		${NXLD_${f:R}} -o ${.TARGET}
+		${NXLD_${f:R}} ${NXLDLIBS} -o ${.TARGET}
 .endfor
 
 .for nofile in ${NO_LIST}
