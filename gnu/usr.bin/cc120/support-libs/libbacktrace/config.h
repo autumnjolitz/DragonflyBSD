@@ -41,12 +41,15 @@
 
 /* Define to 1 if you have KERN_PROC and KERN_PROC_PATHNAME in <sys/sysctl.h>.
    */
+#if !defined(__APPLE__)
 #define HAVE_KERN_PROC 1
+#endif
 
 /* Define to 1 if you have KERN_PROCARGS and KERN_PROC_PATHNAME in
    <sys/sysctl.h>. */
+#if !defined(__APPLE__)
 #define HAVE_KERN_PROC_ARGS 1
-
+#endif
 /* Define if -llzma is available. */
 #define HAVE_LIBLZMA 1
 
@@ -61,7 +64,9 @@
 
 /* Define to 1 if you have the <mach-o/dyld.h> header file. */
 /* #undef HAVE_MACH_O_DYLD_H */
-
+#if defined(__APPLE__)
+#define HAVE_MACH_O_DYLD_H 1
+#endif
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
 
