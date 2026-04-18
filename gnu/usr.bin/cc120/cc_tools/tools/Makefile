@@ -97,7 +97,7 @@ GENTOOLS=	${genprog:S/^/gen/g:S/$/.nx/g}
 .for f in ${GENTOOLS}
 $f: ${f:.nx=.no} ${BUILD_LIBS_${f:R}} ${BUILD_LIBS}
 	${NXCXX} ${NXCXXFLAGS} ${NXLDFLAGS} ${.ALLSRC:M*.n[oa]} \
-		${NXLD_${f:R}} -o ${.TARGET}
+		${NXLD_${f:R}} ${NXLDLIBS} -o ${.TARGET}
 .endfor
 
 MD_DEPS=	${GCCDIR}/gcc/common.md ${md_file}
