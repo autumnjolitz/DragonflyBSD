@@ -20,7 +20,7 @@ VERSION_MAP=	${GCCDIR}/lto-plugin/lto-plugin.map
 # liblto_plugin.so needs to be linked to a PIC version of libiberty.
 # A specially tailored version of libiberty has been created for this purpose.
 LIBIBERTY=	../libiberty_pic/libiberty_pic.a
-LDADD=		${LIBIBERTY}
+LDADD+=		${LIBIBERTY}
 DPADD=		${LIBIBERTY}
 
 # include helpers to decide if lto plugin needs to be installed and where
