@@ -76,11 +76,29 @@ mkdir -p \
     bin \
     etc/defaults \
     lib \
-    include/overlay/{sys,machine}
+    include/overlay/{sys,machine,c++}
 
 cp $SRC/etc/defaults/compilers.conf \
     etc/defaults/compilers.conf
 
+>include/overlay/c++/stdio.h cat <<EOF
+#ifdef __cplusplus
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<stdio.h>)
+#include_next <stdio.h>
+#endif
+#else
+#if __has_include(<stdio.h>)
+#include <stdio.h>
+#endif
+#endif
+
+#ifndef _OVERLAY_CXX_STDIO_H_
+#define _OVERLAY_CXX_STDIO_H_
+
+#endif
+#endif
+EOF
 
 >assert.c cat <<EOF
 #include <sys/param.h>
@@ -124,6 +142,7 @@ volatile int __isthreaded = 1;
 int getosreldate(void) {
     return __DragonFly_version;
 };
+
 EOF
 
 
@@ -338,6 +357,7 @@ EOF
 int getosreldate(void);
 int pipe2(int fildes[2], int flags);
 int eaccess(const char *path, int mode);
+
 #endif
 EOF
 
@@ -503,17 +523,15 @@ EOF
      ((maj) << 20) + ((min) << 10) + (patch))
 #endif
 
-#define __malloclike    __attribute__((__malloc__))
-#if defined(__APPLE__)
-#define __pure 
-#endif
+#define __malloclike    	__attribute__((__malloc__))
+#define __pure  			__attribute__((pure))
 
-#define __nonnull(...)  __attribute__((__nonnull__(__VA_ARGS__)))
-#define __aligned(n) __attribute__ ((aligned(n)))
-#define _Noreturn __attribute__((noreturn))
+#define __nonnull(...)  	__attribute__((__nonnull__(__VA_ARGS__)))
+#define __aligned(n) 		__attribute__ ((aligned(n)))
+#define _Noreturn 			__attribute__((noreturn))
 
-#define CTASSERT(x)     _CTASSERT(x, __LINE__)
-#define _CTASSERT(x, y)     __CTASSERT(x, y)
+#define CTASSERT(x)     	_CTASSERT(x, __LINE__)
+#define _CTASSERT(x, y)		__CTASSERT(x, y)
 #define __CTASSERT(x, y)    typedef char __assert ## y[(x) ? 1 : -1]
 
 #define __printflike(fmtarg, firstvararg) \
@@ -532,9 +550,9 @@ EOF
 
 #define __returns_twice __attribute__((__returns_twice__))
 #define __heedresult    __attribute__((__warn_unused_result__))
-#define __used      __attribute__((__used__))
+#define __used     		__attribute__((__used__))
 #define __always_inline __inline __attribute__((__always_inline__))
-#define __noinline  __attribute__((__noinline__))
+#define __noinline  	__attribute__((__noinline__))
 
 
 #define __ATTR_ALLOC_SIZE(x)     __attribute__((__alloc_size__(x)))
@@ -545,17 +563,27 @@ EOF
 #define _ATTR_ALLOC_SIZE_CHOOSER(...) \
     GET_3RD_ARG(__VA_ARGS__, __ATTR_ALLOC_SIZE2, __ATTR_ALLOC_SIZE)
 #define __alloc_size(...) _ATTR_ALLOC_SIZE_CHOOSER(__VA_ARGS__)(__VA_ARGS__)
-
 #define __alloc_size2(n, x) __attribute__((__alloc_size__(n, x)))
+
 
 #define __unreachable() __builtin_unreachable()
 #define __LONG_LONG_SUPPORTED
-#define __restrict  restrict
-#define __restrict_arr
+
+/*
+** c++ provides __restrict, while c provides restrict.
+*/
+#if defined(__cplusplus)
+#define restrict 		__restrict
+#define __restrict_arr	__restrict
+#else
+#define __restrict  	restrict
+#define __restrict_arr 	restrict
+#endif
+
 #define __predict_true(exp)     __builtin_expect((exp), 1)
 #define __predict_false(exp)    __builtin_expect((exp), 0)
 #define __offsetof(type, field) __builtin_offsetof(type, field)
-#define __constructor(prio) __attribute__((constructor(prio)))
+#define __constructor(prio) 	__attribute__((constructor(prio)))
 
 #if !defined(__cplusplus) && \
     (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901)
@@ -563,6 +591,7 @@ EOF
 #else
 #define __min_size(x)   (x)
 #endif
+
 #include <machine/stdint.h>
 
 
@@ -575,12 +604,13 @@ typedef int             __darwin_pid_t;
 typedef unsigned int    __darwin_id_t;
 typedef unsigned int    __darwin_gid_t;
 
-typedef unsigned short  __darwin_mode_t;
+typedef unsigned short  	__darwin_mode_t;
 typedef unsigned long long  __darwin_ino64_t;
-typedef unsigned long long __darwin_ino_t;
-typedef int __darwin_blksize_t;
-typedef long long __darwin_blkcnt_t;
-typedef int __darwin_dev_t;
+typedef unsigned long long 	__darwin_ino_t;
+
+typedef int 		__darwin_blksize_t;
+typedef long long 	__darwin_blkcnt_t;
+typedef int 		__darwin_dev_t;
 
 #define ___CT_RUNE_T_DECLARED
 #include <sys/_types/_ct_rune_t.h>
@@ -654,18 +684,13 @@ EOF
 #endif
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifndef _OVERLAY_STDIO_H_
 #define _OVERLAY_STDIO_H_
+
 int fputs_unlocked(const char *str, FILE *stream);
-
-#endif
-
-#ifdef __cplusplus
-}
+size_t fwrite_unlocked(const void * restrict ptr, size_t size, size_t nitems, FILE * restrict stream);
+size_t fread_unlocked(void * restrict ptr, size_t size, size_t nitems, FILE *stream);
+int fputc_unlocked(int c, FILE *stream);
 #endif
 EOF
 
@@ -1345,11 +1370,24 @@ ssize_t __fpending(const FILE *fp)
 }
 EOF
 
->fputs_unlocked.c cat <<'EOF'
+>file.c cat <<'EOF'
 #include <stdio.h>
 int fputs_unlocked(const char *str, FILE *stream) {
     return fputs(str, stream);
 };
+
+size_t fwrite_unlocked(const void * restrict ptr, size_t size, size_t nitems, FILE * restrict stream) {
+	return fwrite(ptr, size, nitems, stream);
+};
+
+size_t fread_unlocked(void * restrict ptr, size_t size, size_t nitems, FILE *stream) {
+	return fread(ptr, size, nitems, stream);
+};
+
+int fputc_unlocked(int c, FILE *stream) {
+	return fputc(c, stream);
+}
+
 EOF
 
 >bin/ld-flags-from-script cat <<'EOF'
@@ -1502,7 +1540,10 @@ exec /usr/bin/ld $(printf '%s\n' "$args" | tr '\n' ' ')
 EOF
 chmod +x bin/ld
 
-LIBDARWIN_CFLAGS="-isystem $D/include/overlay -DLIBDARWIN_OVERLAY"
+LIBDARWIN_CFLAGS=\
+"-cxx-isystem $D/include/overlay/c++ "\
+"-isystem $D/include/overlay "\
+"-DLIBDARWIN_OVERLAY"
 LIBDARWIN_LDFLAGS="-L$D/lib -lDarwin"
 
 ${CLANG_HOME}/bin/clang \
@@ -1532,8 +1573,8 @@ ${CLANG_HOME}/bin/clang \
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
     -c \
-    fputs_unlocked.c \
-    -o lib/fputs_unlocked.o
+    file.c \
+    -o lib/file.o
 
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
@@ -1604,17 +1645,41 @@ ar rvs $PWD/lib/libDarwin.a \
         lib/string.o \
         lib/eaccess.o \
         lib/assert.o \
-        lib/fputs_unlocked.o
+        lib/file.o
 
 rm -f lib/*.o
 
+>>include/overlay/sys/queue.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<sys/queue.h>)
+#include_next <sys/queue.h>
+#endif
+#else
+#if __has_include(<sys/queue.h>)
+#include <sys/queue.h>
+#endif
+#endif
 
-install -C \
-    $SRC/sys/sys/queue.h \
-    include/overlay/sys/queue.h
+#ifndef _OVERLAY_SYS_QUEUE_H_
+#include "$SRC/sys/sys/queue.h"
 
-EXTRA_CFLAGS="-Wno-macro-redefined -Wno-nullability-completeness"
-EXTRA_CXXFLAGS="-L${CLANG_HOME}/lib/c++ -L${CLANG_HOME}/lib/unwind -lunwind"
+#endif
+EOF
+
+IGNORE_WARNINGS="-Wno-macro-redefined -Wno-nullability-completeness"
+EXTRA_CFLAGS="${IGNORE_WARNINGS} "\
+"${LIBDARWIN_CFLAGS} "\
+"$(pkg-config --cflags libbsd-overlay)"
+EXTRA_CXXFLAGS=
+# "-L${CLANG_HOME}/lib/c++ -L${CLANG_HOME}/lib/unwind -lunwind"
+
+
+>&2 printf \
+	'EXTRA_CFLAGS=%s\nEXTRA_CXXFLAGS=%s\nLIBDARWIN_CFLAGS=%s\nLIBDARWIN_LDFLAGS=%s\n' \
+	"$EXTRA_CFLAGS" \
+	"$EXTRA_CXXFLAGS" \
+	"$LIBDARWIN_CFLAGS" \
+	"$LIBDARWIN_LDFLAGS"
 
 cat >etc/compilers.conf <<EOF
 
@@ -1622,8 +1687,8 @@ clang21_CC=${CLANG_HOME}/bin/clang
 clang21_CXX=${CLANG_HOME}/bin/clang++
 clang21_CPP=${CLANG_HOME}/bin/clang-cpp
 clang21_GCOV=${CLANG_HOME}/bin/clang-cov
-clang21_INCOPT="-nostdinc -iwithprefixbefore ${D}/include -iprefix \${INCPREFIX} --include-directory-after ${SDK}/usr/include --include-directory-after ${CLANG_HOME}/lib/clang/21/include ${LIBDARWIN_CFLAGS} $(pkg-config --cflags libbsd-overlay) ${EXTRA_CFLAGS}"
-clang21_INCOPTCXX="-nostdinc++ -D_LIBCPP_DISABLE_AVAILABILITY -cxx-isystem ${CLANG_HOME}/include/c++/v1 ${EXTRA_CXXFLAGS}"
+clang21_INCOPT="-nostdinc -iprefix \${INCPREFIX} -iwithprefix ${SDK}/usr/include --include-directory-after ${CLANG_HOME}/lib/clang/21/include ${EXTRA_CFLAGS}"
+clang21_INCOPTCXX="-nostdinc++ -D_LIBCPP_DISABLE_AVAILABILITY -cxx-isystem ${SDK}/include/c++/v1 -cxx-isystem ${CLANG_HOME}/include/c++/v1 ${EXTRA_CXXFLAGS}"
 clang21_CLANG=\${clang21_CC}
 clang21_CLANGCXX=\${clang21_CXX}
 clang21_CLANGCPP=\${clang21_CPP}
@@ -1732,6 +1797,7 @@ start-build() {
         TARGET_PLATFORM=pc64 \
         CC="$D/bin/cc" \
         _HOSTPATH="${D}/bin:${PATH}" \
+        NXPATH='${_HOSTPATH}' \
         EXTRA_LDADD+="$(pkg-config --libs libbsd-overlay) ${LIBDARWIN_LDFLAGS}" \
         "$make_args"
 }
