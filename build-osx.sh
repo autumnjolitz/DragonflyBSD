@@ -2270,6 +2270,7 @@ start_build () {
 	    MAKEOBJDIRPREFIX="$MAKEOBJDIRPREFIX" \
 	    HOST_BINUTILSVER=binutils234 \
 	    MAKE_CONF=$BUILDROOT/etc/make.conf \
+	    MACHINE_PLATFORM=pc64 \
 		bmake \
 		    -e \
 		    -C "$SRC" \
