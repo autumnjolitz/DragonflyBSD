@@ -76,12 +76,12 @@ mkdir -p \
     bin \
     etc/defaults \
     lib \
-    include/overlay/{sys,machine,c++}
+    include/libdarwin/{sys,machine,c++}
 
 cp $SRC/etc/defaults/compilers.conf \
     etc/defaults/compilers.conf
 
->include/overlay/c++/stdio.h cat <<EOF
+>include/libdarwin/c++/stdio.h cat <<EOF
 #ifdef __cplusplus
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<stdio.h>)
@@ -147,7 +147,7 @@ EOF
 
 
 >varsym_shim.c cat <<EOF
-#include <overlay/sys/varsym.h>
+#include <libdarwin/sys/varsym.h>
 
 int varsym_get(int mask, const char *wild, char *buf, int bufsize) {
     return -1;
@@ -159,7 +159,7 @@ int yywrap(void) {
 };
 EOF
 
->include/overlay/fts.h cat <<EOF
+>include/libdarwin/fts.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<fts.h>)
 #include_next <fts.h>
@@ -176,7 +176,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/stdarg.h cat <<EOF
+>include/libdarwin/sys/stdarg.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/stdarg.h>)
 #include_next <sys/stdarg.h>
@@ -192,7 +192,7 @@ EOF
 #include <machine/stdarg.h>
 #endif
 EOF
->include/overlay/machine/stdarg.h cat <<EOF
+>include/libdarwin/machine/stdarg.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<machine/stdarg.h>)
 #include_next <machine/stdarg.h>
@@ -219,7 +219,7 @@ typedef va_list __va_list;
 
 #endif
 EOF
->include/overlay/machine/wchar.h cat <<EOF
+>include/libdarwin/machine/wchar.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 
 #ifndef _MACHINE_WCHAR_H_
@@ -236,7 +236,7 @@ typedef wint_t __wint_t;
 #endif
 EOF
 
->include/overlay/sys/_clock_id.h cat <<EOF
+>include/libdarwin/sys/_clock_id.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 
 #ifndef _SYS_CLOCK_ID_H_
@@ -247,7 +247,7 @@ EOF
 
 #endif
 EOF
->include/overlay/sys/_null.h cat <<EOF
+>include/libdarwin/sys/_null.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 
 #ifndef _SYS_NULL_H_
@@ -260,7 +260,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/device.h cat <<EOF
+>include/libdarwin/sys/device.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/device.h>)
 #include_next <sys/device.h>
@@ -274,15 +274,16 @@ EOF
 #ifndef _OVERLAY_SYS_DEVICE_H_
 #define _OVERLAY_SYS_DEVICE_H_
 #include <sys/ioctl.h>
+#ifndef D_MEM
 #define D_MEM 0
-
+#endif
 #endif
 
 EOF
 
 
 
->include/overlay/signal.h cat <<'EOF'
+>include/libdarwin/signal.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<signal.h>)
 #include_next <signal.h>
@@ -295,12 +296,13 @@ EOF
 
 #ifndef OVERLAY_SIGNAL_H
 #define OVERLAY_SIGNAL_H
+#ifndef sys_nsig
 #define sys_nsig 16
-
+#endif
 #endif
 EOF
 
->include/overlay/assert.h cat <<'EOF'
+>include/libdarwin/assert.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<assert.h>)
 #include_next <assert.h>
@@ -320,7 +322,7 @@ EOF
 
 #endif
 EOF
->include/overlay/unistd.h cat <<'EOF'
+>include/libdarwin/unistd.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<unistd.h>)
 #include_next <unistd.h>
@@ -338,7 +340,7 @@ EOF
 
 #endif
 EOF
->include/overlay/sys/unistd.h cat <<'EOF'
+>include/libdarwin/sys/unistd.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/unistd.h>)
 #include_next <sys/unistd.h>
@@ -354,14 +356,22 @@ EOF
 
 #include <time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 int getosreldate(void);
 int pipe2(int fildes[2], int flags);
 int eaccess(const char *path, int mode);
 
+#ifdef __cplusplus
+}
+#endif
 #endif
 EOF
 
->include/overlay/time.h cat <<'EOF'
+>include/libdarwin/time.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<time.h>)
 #include_next <time.h>
@@ -381,7 +391,7 @@ typedef pid_t     lwpid_t;
 #endif
 EOF
 
->include/overlay/sys/stat.h cat <<'EOF'
+>include/libdarwin/sys/stat.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/stat.h>)
 #include_next <sys/stat.h>
@@ -402,7 +412,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/mman.h cat <<'EOF'
+>include/libdarwin/sys/mman.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/mman.h>)
 #include_next <sys/mman.h>
@@ -415,15 +425,19 @@ EOF
 
 #ifndef OVERLAY_SYS_STAT_H_
 #define OVERLAY_SYS_STAT_H_
-
+#if !defined(MAP_NOCORE)
 #define MAP_NOCORE 0x0
+#endif
+#if !defined(MAP_SIZEALIGN)
 #define MAP_SIZEALIGN 0x0
+#endif
+#if !defined(MAP_NOSYNC)
 #define MAP_NOSYNC 0x0
-
+#endif
 #endif
 EOF
 
->include/overlay/stdlib.h cat <<'EOF'
+>include/libdarwin/stdlib.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<stdlib.h>)
 #include_next <stdlib.h>
@@ -440,7 +454,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/param.h cat <<'EOF'
+>include/libdarwin/sys/param.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/param.h>)
 #include_next <sys/param.h>
@@ -453,8 +467,10 @@ EOF
 
 #ifndef OVERLAY_SYS_PARAM_H
 #define OVERLAY_SYS_PARAM_H
-
+#if !defined(__DragonFly_version)
 #define __DragonFly_version 600518
+#endif
+
 
 #define roundup2(x, y)  (((x)+((y)-1))&(~((y)-1))) /* if y is powers of two */
 #define rounddown2(x, y) ((x) & ~((y) - 1))
@@ -467,7 +483,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/_termios.h cat <<'EOF'
+>include/libdarwin/sys/_termios.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/termios.h>)
 #include_next <sys/termios.h>
@@ -484,7 +500,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/cdefs.h cat <<EOF
+>include/libdarwin/sys/cdefs.h cat <<EOF
 
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/cdefs.h>)
@@ -642,14 +658,14 @@ for empty in \
         machine/int_const.h \
         machine/int_limits.h \
     ; do
-    mkdir -p include/overlay/"$(dirname "$empty")"
-    if ! [ -e include/overlay/"$empty" ]; then
-        >include/overlay/"$empty" cat <<EOF
+    mkdir -p include/libdarwin/"$(dirname "$empty")"
+    if ! [ -e include/libdarwin/"$empty" ]; then
+        >include/libdarwin/"$empty" cat <<EOF
 EOF
     fi
 done
 
->include/overlay/string.h cat <<EOF
+>include/libdarwin/string.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<string.h>)
 #include_next <string.h>
@@ -662,6 +678,12 @@ done
 
 #ifndef _OVERLAY_STRING_H_
 #define _OVERLAY_STRING_H_
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 #ifndef memrchr
 void *memrchr(const void *b, int c, size_t len);
 #endif
@@ -670,10 +692,14 @@ void *mempcpy(void *dst, const void *src, size_t len);
 #endif
 #undef stpcpy
 char *stpcpy(char * restrict dst, const char * restrict src);
+
+#ifdef __cplusplus
+}
+#endif
 #endif
 EOF
 
->include/overlay/stdio.h cat <<EOF
+>include/libdarwin/stdio.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<stdio.h>)
 #include_next <stdio.h>
@@ -687,36 +713,40 @@ EOF
 #ifndef _OVERLAY_STDIO_H_
 #define _OVERLAY_STDIO_H_
 
-int fputs_unlocked(const char *str, FILE *stream);
-size_t fwrite_unlocked(const void * restrict ptr, size_t size, size_t nitems, FILE * restrict stream);
-size_t fread_unlocked(void * restrict ptr, size_t size, size_t nitems, FILE *stream);
-int fputc_unlocked(int c, FILE *stream);
-#endif
-EOF
-
->include/overlay/sys/varsym.h cat <<EOF
-#ifdef LIBDARWIN_OVERLAY
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+int fputs_unlocked(const char *str, FILE *stream);
+size_t fwrite_unlocked(const void * restrict ptr, size_t size, size_t nitems, FILE * restrict stream);
+size_t fread_unlocked(void * restrict ptr, size_t size, size_t nitems, FILE *stream);
+int fputc_unlocked(int c, FILE *stream);
+int fflush_unlocked(FILE *stream);
+
+#ifdef __cplusplus
+}
+#endif
+#endif
+EOF
+
+>include/libdarwin/sys/varsym.h cat <<EOF
 #ifndef _SYS_VARSYM_H_
 #define _SYS_VARSYM_H_
 
 #define MAXVARSYM_DATA 1024
 #define VARSYM_ALL_MASK 0
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int varsym_get(int mask, const char *wild, char *buf, int bufsize);
-
-#endif
-#endif
 
 #ifdef __cplusplus
 }
 #endif
+#endif
 EOF
->include/overlay/sys/timespec.h cat <<EOF
+>include/libdarwin/sys/timespec.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/timespec.h>)
 #include_next <sys/timespec.h>
@@ -737,7 +767,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/procfs.h cat <<EOF
+>include/libdarwin/sys/procfs.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/procfs.h>)
 #include_next <sys/procfs.h>
@@ -753,7 +783,7 @@ EOF
 #endif
 EOF
 
->include/overlay/elf-hints.h cat <<EOF
+>include/libdarwin/elf-hints.h cat <<EOF
 #ifndef _OVERLAY_ELF_HINTS_H_
 
 #include "$SRC/include/elf-hints.h"
@@ -762,7 +792,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/_timespec.h cat <<EOF
+>include/libdarwin/sys/_timespec.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/_timespec.h>)
 #include_next <sys/_timespec.h>
@@ -780,7 +810,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/_pthread_spinlock.h cat << 'EOF'
+>include/libdarwin/sys/_pthread_spinlock.h cat << 'EOF'
 #ifndef _PTHREAD_SPINLOCK_H_
 
 #ifdef __cplusplus
@@ -841,7 +871,7 @@ int pthread_spin_unlock(pthread_spinlock_t *lock) {
 
 EOF
 
->include/overlay/sys/_pthread_barrier.h cat <<EOF
+>include/libdarwin/sys/_pthread_barrier.h cat <<EOF
 /*
  * Copyright (c) 2015, Aleksey Demakov
  * All rights reserved.
@@ -923,7 +953,7 @@ int pthread_barrier_wait(pthread_barrier_t *barrier);
 #endif /* PTHREAD_BARRIER_H */
 EOF
 
->include/overlay/pthread.h cat <<'EOF'
+>include/libdarwin/pthread.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<pthread.h>)
 #include_next <pthread.h>
@@ -940,12 +970,12 @@ EOF
 #endif
 EOF
 
->include/overlay/objformat.h cat <<EOF
+>include/libdarwin/objformat.h cat <<EOF
 #include "${SRC}/include/objformat.h"
 
 EOF
 
->include/overlay/sys/_pthreadtypes.h cat <<'EOF'
+>include/libdarwin/sys/_pthreadtypes.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/_pthreadtypes.h>)
 #include_next <sys/_pthreadtypes.h>
@@ -974,7 +1004,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/sched.h cat <<'EOF'
+>include/libdarwin/sys/sched.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<pthread/sched.h>)
 #include_next <pthread/sched.h>
@@ -990,7 +1020,7 @@ EOF
 #endif
 EOF
 
->include/overlay/sys/cpumask.h cat <<'EOF'
+>include/libdarwin/sys/cpumask.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/cpumask.h>)
 #include_next <sys/cpumask.h>
@@ -1013,7 +1043,7 @@ typedef __cpumask_t cpumask_t;
 #endif
 EOF
 
->include/overlay/sys/limits.h cat <<'EOF'
+>include/libdarwin/sys/limits.h cat <<'EOF'
 #ifdef LIBDARWIN_OVERLAY
 #   if defined(__aarch64__) && __has_include_next(<arm/limits.h>)
 #     include_next <arm/limits.h>
@@ -1037,7 +1067,7 @@ EOF
 #endif
 EOF
 
->include/overlay/machine/atomic.h cat <<EOF
+>include/libdarwin/machine/atomic.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<machine/stdatomic.h>)
 #include_next <machine/stdatomic.h>
@@ -1055,13 +1085,15 @@ EOF
 #include <libkern/OSAtomic.h>
 
 #define atomic_add_long(P,V) ((void) OSAtomicAdd32Barrier(V,  P))
+
 #define atomic_fetchadd_long(P, V) OSAtomicAdd32Barrier(V,  P)
+#define atomic_fetchadd_int(P, V)  OSAtomicAdd32Barrier(V,  P)
 
 #endif
 #endif
 EOF
 
->include/overlay/machine/inttypes.h cat <<EOF
+>include/libdarwin/machine/inttypes.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<inttypes.h>)
 #include_next <inttypes.h>
@@ -1081,7 +1113,7 @@ EOF
 EOF
 
 
->include/overlay/machine/stdint.h cat <<EOF
+>include/libdarwin/machine/stdint.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<stdint.h>)
 #include_next <stdint.h>
@@ -1362,7 +1394,7 @@ ssize_t __fpending(const FILE *fp)
 {
     if ((fp)->_bf._base != NULL) {
         if (HASUB(fp))
-            return(fp->_ur - (int) fp->_bf._base);
+            return(fp->_ur - (unsigned long long) fp->_bf._base);
         else
             return(fp->_p - fp->_bf._base);
     }
@@ -1386,6 +1418,10 @@ size_t fread_unlocked(void * restrict ptr, size_t size, size_t nitems, FILE *str
 
 int fputc_unlocked(int c, FILE *stream) {
 	return fputc(c, stream);
+}
+
+int fflush_unlocked(FILE *stream) {
+	return fflush(stream);
 }
 
 EOF
@@ -1541,8 +1577,8 @@ EOF
 chmod +x bin/ld
 
 LIBDARWIN_CFLAGS=\
-"-cxx-isystem $D/include/overlay/c++ "\
-"-isystem $D/include/overlay "\
+"-cxx-isystem $D/include/libdarwin/c++ "\
+"-isystem $D/include/libdarwin "\
 "-DLIBDARWIN_OVERLAY"
 LIBDARWIN_LDFLAGS="-L$D/lib -lDarwin"
 
@@ -1649,7 +1685,7 @@ ar rvs $PWD/lib/libDarwin.a \
 
 rm -f lib/*.o
 
->>include/overlay/sys/queue.h cat <<EOF
+>>include/libdarwin/sys/queue.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/queue.h>)
 #include_next <sys/queue.h>
@@ -1792,12 +1828,14 @@ start-build() {
         HOST_CCVER=clang21 \
         CCVER=clang21 \
         NOSHARED=NO \
-        NXLDFLAGS='${LDFLAGS}' \
         TARGET_ARCH=x86_64 \
         TARGET_PLATFORM=pc64 \
         CC="$D/bin/cc" \
+        CXX="$D/bin/c++" \
         _HOSTPATH="${D}/bin:${PATH}" \
         NXPATH='${_HOSTPATH}' \
+        NXLDFLAGS='${LDFLAGS}' \
+        NXLDLIBS+="$(pkg-config --libs libbsd-overlay) ${LIBDARWIN_LDFLAGS}" \
         EXTRA_LDADD+="$(pkg-config --libs libbsd-overlay) ${LIBDARWIN_LDFLAGS}" \
         "$make_args"
 }
