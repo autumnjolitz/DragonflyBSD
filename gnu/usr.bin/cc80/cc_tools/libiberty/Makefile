@@ -15,6 +15,14 @@ SRCS=	concat.c cp-demangle.c cp-demint.c cplus-dem.c dyn-string.c \
 	filename_cmp.c regex.c xstrndup.c xasprintf.c xvasprintf.c \
 	vprintf-support.c
 
+.ifdef ${.MAKE.OS} == "Darwin"
+# we don't have these function in native OSX:
+#  pex_init_common, dlang_demangle, 
+#  rust_is_mangled, rust_demangle_sym
+# so please build these for us ;)
+SRCS+= rust-demangle.c d-demangle.c pex-common.c
+.endif
+
 config.h: ${GOOD_CONFIG}
 	cp ${.ALLSRC} .
 
