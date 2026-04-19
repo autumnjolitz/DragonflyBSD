@@ -905,7 +905,7 @@ EOF
 **      causes the inline of isspace in <locale> to fail.
 */
 #if !defined(__cplusplus)
-#error "this is a c++ header, why is __cplusplus missing?"
+#error "c++ <locale> cannot be used for C"
 #endif
 
 #if defined(SAFE_CTYPE_H)
@@ -2278,11 +2278,11 @@ clang21_GCOV=${CLANG_HOME}/bin/clang-cov
 # you can tack on another default last path like:
 # -idirafter ${CLANG_HOME}/lib/clang/21/include
 clang21_INCOPT="-nostdinc -iprefix \${INCPREFIX} -iwithprefix ${SDK}/usr/include -idirafter ${CLANG_HOME}/lib/clang/21/include"
-clang21_INCOPTCXX="-nostdinc++ -cxx-isystem ${SDK}/usr/include/c++/v1"
+clang21_INCOPTCXX="-nostdinc++ ${EXTRA_CXXFLAGS} -cxx-isystem ${SDK}/usr/include/c++/v1"
 clang21_CLANG=\${clang21_CC}
 clang21_CLANGCXX=\${clang21_CXX}
 clang21_CLANGCPP=\${clang21_CPP}
-clang21_CXXFLAGS="${EXTRA_CXXFLAGS} ${EXTRA_CFLAGS}"
+clang21_CXXFLAGS="${EXTRA_CFLAGS}"
 clang21_CFLAGS="${EXTRA_CFLAGS}"
 
 EOF
