@@ -110,9 +110,35 @@ mkdir -p \
 
 cp $SRC/etc/defaults/compilers.conf \
     etc/defaults/compilers.conf
+>include/libdarwin/c++/string.h cat <<EOF
+#ifndef __cplusplus
+#error "c++ string.h cannot be used for C"
+#endif
+#ifdef LIBDARWIN_CXX_OVERLAY
+#if __has_include_next(<string.h>)
+#include_next <string.h>
+#endif
+#else
+#if __has_include(<string.h>)
+#include <string.h>
+#endif
+#endif
+
+#ifndef _LIBDARWIN_CXX_STRING_H_
+#define _LIBDARWIN_CXX_STRING_H_
+
+#endif
+EOF
 
 >include/libdarwin/c++/stdio.h cat <<EOF
-#ifdef __cplusplus
+#ifndef __cplusplus
+#error "c++ stdio.h cannot be used for C"
+#endif
+
+#ifndef _LIBDARWIN_CXX_STDIO_H_
+#define _LIBDARWIN_CXX_STDIO_H_
+#endif
+
 #ifdef LIBDARWIN_CXX_OVERLAY
 #if __has_include_next(<stdio.h>)
 #include_next <stdio.h>
@@ -123,11 +149,6 @@ cp $SRC/etc/defaults/compilers.conf \
 #endif
 #endif
 
-#ifndef _LIBDARWIN_CXX_STDIO_H_
-#define _LIBDARWIN_CXX_STDIO_H_
-
-#endif
-#endif
 EOF
 
 >assert.c cat <<EOF
@@ -218,7 +239,7 @@ EOF
 
 >include/libdarwin/c++/stddef.h cat <<EOF
 #if !defined(__cplusplus)
-#error "what are you doing with a c++ header?"
+#error "c++ stddef.h cannot be used for C"
 #endif
 
 #ifdef LIBDARWIN_CXX_OVERLAY
@@ -264,6 +285,67 @@ EOF
 #endif
 EOF
 
+>include/libdarwin/stdbool.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<stdbool.h>)
+#include_next <stdbool.h>
+#define _LIBDARWIN_STDARG_NEEDS_STDBOOL_H_
+#endif
+#else
+#if __has_include(<stdbool.h>)
+#include <stdbool.h>
+#define _LIBDARWIN_STDARG_NEEDS_STDBOOL_H_
+#endif
+#endif
+
+#ifndef _LIBDARWIN_STDARG_H_
+#define _LIBDARWIN_STDARG_H_
+#ifndef _LIBDARWIN_STDARG_NEEDS_STDBOOL_H_
+#define _LIBDARWIN_STDARG_NEEDS_STDBOOL_H_
+
+#define __bool_true_false_are_defined   1
+
+#ifndef __cplusplus
+
+#include <sys/cdefs.h>
+
+#define false   0
+#define true    1
+
+#define bool    _Bool
+#if !defined(__STDC_VERSION__) || __STDC_VERSION__ < 199901L && !__GNUC_PREREQ__(3, 0)
+typedef int _Bool;
+#endif
+
+#endif
+#endif
+#endif
+
+EOF
+
+
+>include/libdarwin/stdarg.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<stdarg.h>)
+#include_next <stdarg.h>
+#define _LIBDARWIN_STDARG_NEEDS_SYS_STDARG_H_
+#endif
+#else
+#if __has_include(<stdarg.h>)
+#include <stdarg.h>
+#define _LIBDARWIN_STDARG_NEEDS_SYS_STDARG_H_
+#endif
+#endif
+
+#ifndef _LIBDARWIN_STDARG_H_
+#define _LIBDARWIN_STDARG_H_
+#ifndef _LIBDARWIN_STDARG_NEEDS_SYS_STDARG_H_
+#define _LIBDARWIN_STDARG_NEEDS_SYS_STDARG_H_
+#include <sys/stdarg.h>
+#endif
+#endif
+EOF
+
 >include/libdarwin/sys/stdarg.h cat <<EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/stdarg.h>)
@@ -275,8 +357,8 @@ EOF
 #endif
 #endif
 
-#ifndef _SYS_STDARG_H_
-#define _SYS_STDARG_H_
+#ifndef _LIBDARWIN_SYS_STDARG_H_
+#define _LIBDARWIN_SYS_STDARG_H_
 #include <machine/stdarg.h>
 #endif
 EOF
@@ -1497,6 +1579,14 @@ EOF
 #ifndef _MACHINE_STDINT_H_
 #define _MACHINE_STDINT_H_
 #include <sys/cdefs.h>
+#if defined(__cplusplus) || defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
+/*
+** bool is natively available in c++.
+** meanwhile, you need c99+
+*/
+#include <stdbool.h>
+#endif
+#include <stdarg.h>
 
 typedef __signed char   __int8_t;
 typedef unsigned char   __uint8_t;
@@ -2168,8 +2258,7 @@ IGNORE_WARNINGS="-Wno-macro-redefined -Wno-nullability-completeness"
 EXTRA_CFLAGS="${IGNORE_WARNINGS} "\
 "${LIBDARWIN_CFLAGS} "\
 "$(pkg-config --cflags libbsd-overlay)"
-EXTRA_CXXFLAGS=\
-"${LIBDARWIN_CXXFLAGS} "
+EXTRA_CXXFLAGS="${LIBDARWIN_CXXFLAGS}"
 # "-L${CLANG_HOME}/lib/c++ -L${CLANG_HOME}/lib/unwind -lunwind"
 
 
@@ -2186,11 +2275,15 @@ clang21_CC=${CLANG_HOME}/bin/clang
 clang21_CXX=${CLANG_HOME}/bin/clang++
 clang21_CPP=${CLANG_HOME}/bin/clang-cpp
 clang21_GCOV=${CLANG_HOME}/bin/clang-cov
-clang21_INCOPT="-nostdinc -iprefix \${INCPREFIX} -iwithprefix ${SDK}/usr/include --include-directory-after ${CLANG_HOME}/lib/clang/21/include ${EXTRA_CFLAGS}"
-clang21_INCOPTCXX="-nostdinc++ -D_LIBCPP_DISABLE_AVAILABILITY -cxx-isystem ${SDK}/include/c++/v1 -cxx-isystem ${CLANG_HOME}/include/c++/v1 ${EXTRA_CXXFLAGS}"
+# you can tack on another default last path like:
+# -idirafter ${CLANG_HOME}/lib/clang/21/include
+clang21_INCOPT="-nostdinc -iprefix \${INCPREFIX} -iwithprefix ${SDK}/usr/include -idirafter ${CLANG_HOME}/lib/clang/21/include"
+clang21_INCOPTCXX="-nostdinc++ -cxx-isystem ${SDK}/usr/include/c++/v1"
 clang21_CLANG=\${clang21_CC}
 clang21_CLANGCXX=\${clang21_CXX}
 clang21_CLANGCPP=\${clang21_CPP}
+clang21_CXXFLAGS="${EXTRA_CXXFLAGS} ${EXTRA_CFLAGS}"
+clang21_CFLAGS="${EXTRA_CFLAGS}"
 
 EOF
 
@@ -2280,7 +2373,7 @@ EXTRA_LDADD=\
 # OSX basically hates static linking.
 # if you can show you've got the crt1.o and friends,
 # then add `-static` to STATIC_LDFLAGS (or just remove NXLDFLAGS declaration entirely!)
-STATIC_LDFLAGS='${LDFLAGS} -Wl,-all_load'
+STATIC_LDFLAGS='${LDFLAGS}'
 printf "Setting STATIC_LDFLAGS=%s\nSetting {EXTRA_LDADD, NXLDLIBS} = %s\n" \
 	"$STATIC_LDFLAGS" \
 	"$EXTRA_LDADD"
@@ -2312,7 +2405,17 @@ start_build () {
 		    "$make_args"
 }
 
-
+brief_tail () {
+    local buf="$(tail -20 bw.out)"
+    local buf_len=$(printf "%s\n" "${buf}"| wc -c)
+    local len=100
+    local ch=' '
+    local padding=$(printf '%*s' "$len")
+    printf "%${buf_len}"'s\r' "${padding}"
+    printf "%${buf_len}"'s\r' "$buf"
+    sleep 1
+    printf "%${buf_len}"'s\r' "${padding}"
+}
 
 eval "${_log}" start_build \
      "${_background}" || rc="$?"
@@ -2324,7 +2427,7 @@ if [ "${_background}" != '' ]; then
     t_e="$(date +%s)"
     >&2 printf 'build ended in %ss, return code %s\n' "$((t_e - t_s))" "$rc"
 fi
-
+printf '\a'
 if [ $rc -ne 0 ]; then
     if [ ! -z "${_log}" ]; then
         >&2 printf 'examine log at: %s\n' "$LOGFILE"
