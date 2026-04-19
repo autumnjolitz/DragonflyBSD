@@ -196,7 +196,7 @@ static void
 mmc_ms_delay(int ms)
 {
 	int timo;
-	int dummy;
+	int dummy = 0;
 
 	timo = ms * hz / 1000;
 	if (timo > 0)
