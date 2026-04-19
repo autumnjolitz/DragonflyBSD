@@ -36,7 +36,7 @@ fi
 
 
 _verbose=0
-make_args=crossworld
+make_args=buildworld
 
 while [ $# -gt 0 ]; do
     case "${1}" in
