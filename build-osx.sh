@@ -36,7 +36,7 @@ fi
 
 
 _verbose=0
-make_args=buildworld
+make_args=
 
 while [ $# -gt 0 ]; do
     case "${1}" in
@@ -54,11 +54,19 @@ while [ $# -gt 0 ]; do
             exit 1
         ;;
         *)
-        make_args="${make_args} ${1}"
+        if [ "${make_args}" = '' ]; then
+            make_args="${1}"
+        else
+            make_args="${make_args} ${1}"
+        fi
         shift
         ;;
     esac
 done
+if [ "$make_args" = '' ]; then
+    make_args=buildworld
+fi
+echo $make_args
 
 LOGFILE="$OPWD/bw.out"
 _log=">${LOGFILE} 2>&1"
@@ -293,19 +301,19 @@ EOF
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<stdbool.h>)
 #include_next <stdbool.h>
-#define _LIBDARWIN_STDARG_NEEDS_STDBOOL_H_
+#define __LIBDARWIN_HAS_STDBOOL_H_
 #endif
 #else
 #if __has_include(<stdbool.h>)
 #include <stdbool.h>
-#define _LIBDARWIN_STDARG_NEEDS_STDBOOL_H_
+#define __LIBDARWIN_HAS_STDBOOL_H_
 #endif
 #endif
 
-#ifndef _LIBDARWIN_STDARG_H_
-#define _LIBDARWIN_STDARG_H_
-#ifndef _LIBDARWIN_STDARG_NEEDS_STDBOOL_H_
-#define _LIBDARWIN_STDARG_NEEDS_STDBOOL_H_
+#ifndef _LIBDARWIN_STDBOOL_H_
+#define _LIBDARWIN_STDBOOL_H_
+#ifndef __LIBDARWIN_HAS_STDBOOL_H_
+#define __LIBDARWIN_HAS_STDBOOL_H_
 
 #define __bool_true_false_are_defined   1
 
@@ -384,12 +392,10 @@ EOF
 #include <sys/cdefs.h>
 #include <sys/_types/_va_list.h>
 typedef va_list __va_list;
-
 #define va_start(v,l)  __builtin_va_start(v,l)
 #define va_end(v)  __builtin_va_end(v)
 #define va_arg(v, l)  __builtin_va_arg(v, l)
 #define va_copy(v, l)  __builtin_va_copy(v, l)
-
 
 #endif
 EOF
@@ -678,7 +684,6 @@ EOF
 EOF
 
 >include/libdarwin/sys/cdefs.h cat <<EOF
-
 #ifdef LIBDARWIN_OVERLAY
 #if __has_include_next(<sys/cdefs.h>)
 #include_next <sys/cdefs.h>
@@ -689,9 +694,8 @@ EOF
 #endif
 #endif
 
-#ifndef OVERLAY_SYS_CDEFS_H
-#define OVERLAY_SYS_CDEFS_H
-
+#ifndef _LIBDARWIN_SYS_CDEFS_H_
+#define _LIBDARWIN_SYS_CDEFS_H_
 #define _XOPEN_SOURCE       1
 #define _DARWIN_C_SOURCE    1
 
@@ -700,7 +704,13 @@ EOF
 #define __BSD_VISIBLE       1
 #define __ISO_C_VISIBLE     2011
 #define __EXT1_VISIBLE      1
+
+
 #define HAVE_SYSCTL 1
+
+#ifndef __clang__
+#define __DECONST(type, var)    ((type)(__uintptr_t)(const void *)(var))
+#endif
 
 #ifndef __GNUC_PREREQ__
 # define __GNUC_PREREQ__(ma, mi) __GNUC_PREREQ(ma, mi)
@@ -719,6 +729,7 @@ EOF
 
 #define __nonnull(...)  	__attribute__((__nonnull__(__VA_ARGS__)))
 #define __aligned(n) 		__attribute__ ((aligned(n)))
+
 #define _Noreturn 			__attribute__((noreturn))
 
 #define CTASSERT(x)     	_CTASSERT(x, __LINE__)
@@ -2166,7 +2177,7 @@ if [ "$_try_static" -eq 1 ] && [ "${_try_static_for}" != '' ] ; then
 fi
 skip_arg_no="${skip_arg_no}:"
 
->&2 printf 'ARJ: wanna static: %s\n' "$(printf "${_try_static_for}\n" | tr '\n' ' ')"
+# >&2 printf 'ARJ: wanna static: %s\n' "$(printf "${_try_static_for}\n" | tr '\n' ' ')"
 
 while [ $# -gt 0 ]; do
     case "${1}" in
@@ -2457,7 +2468,8 @@ ${CLANG_HOME}/bin/clang \
         -Wl,-install_name,"$PWD/lib/libDarwin.dylib" \
         -o lib/libDarwin.dylib
 
-ar rvs $PWD/lib/libDarwin.a \
+${CLANG_HOME}/bin/clang \
+        --emit-static-lib \
         lib/_init.o \
         lib/base64.o \
         lib/yywrap.o \
@@ -2476,7 +2488,8 @@ ar rvs $PWD/lib/libDarwin.a \
         lib/assert.o \
         lib/file.o \
         lib/rtld.o \
-        lib/posix_fallocate.o
+        lib/posix_fallocate.o \
+        -o lib/libDarwin.a
 
 rm -f lib/*.o
 
@@ -2499,10 +2512,6 @@ EOF
 
 
 EXTRA_CFLAGS=\
-"-fapple-link-rtlib "\
-"--rtlib=compiler-rt "\
-"-DLIBCXX_USE_COMPILER_RT=YES "\
-"-DLIBCXXABI_USE_COMPILER_RT=YES "\
 "${LIBDARWIN_CFLAGS} "\
 "$(pkg-config --cflags libbsd-overlay)"
 EXTRA_CXXFLAGS="${LIBDARWIN_CXXFLAGS}"
@@ -2515,6 +2524,17 @@ EXTRA_CXXFLAGS="${LIBDARWIN_CXXFLAGS}"
 	"$EXTRA_CXXFLAGS" \
 	"$LIBDARWIN_CFLAGS" \
 	"$LIBDARWIN_LDFLAGS"
+
+EXTRA_CLANG_CFLAGS="${EXTRA_CFLAGS} "\
+"-fapple-link-rtlib "\
+"--rtlib=compiler-rt "\
+"-DLIBCXX_USE_COMPILER_RT=YES "\
+"-DLIBCXXABI_USE_COMPILER_RT=YES "\
+"-Wl,-flat_namespace "\
+"-Wl,-prefer_static_for,-lbsd -Wl,-prefer_static_for,-lDarwin "
+
+
+GCC_HOME=$(brew --prefix gcc@12)
 
 cat >etc/compilers.conf <<EOF
 
@@ -2529,8 +2549,21 @@ clang21_INCOPTCXX="-nostdinc++ ${EXTRA_CXXFLAGS} -cxx-isystem ${SDK}/usr/include
 clang21_CLANG=\${clang21_CC}
 clang21_CLANGCXX=\${clang21_CXX}
 clang21_CLANGCPP=\${clang21_CPP}
-clang21_CXXFLAGS="${EXTRA_CFLAGS}"
-clang21_CFLAGS="${EXTRA_CFLAGS}"
+clang21_CXXFLAGS="${EXTRA_CLANG_CFLAGS}"
+clang21_CFLAGS="${EXTRA_CLANG_CFLAGS}"
+
+gcc120_CC=${GCC_HOME}/bin/gcc-12
+gcc120_CXX=${GCC_HOME}/bin/g++-12
+gcc120_CPP=${GCC_HOME}/bin/cpp-12
+gcc120_GCOV=${GCC_HOME}/bin/gcov-12
+gcc120_INCOPT="-nostdinc ${EXTRA_CFLAGS} -iprefix \${INCPREFIX} -iwithprefix ${SDK}/usr/include -idirafter ${GCC_HOME}/lib/gcc/12/gcc/aarch64-apple-darwin23/12/include"
+gcc120_INCOPTCXX="-nostdinc++ ${EXTRA_CXXFLAGS} -cxx-isystem ${SDK}/usr/include/c++/v1"
+gcc120_CLANG=\${gcc120_CC}
+gcc120_CLANGCXX=\${gcc120_CXX}
+gcc120_CLANGCPP=\${gcc120_CPP}
+gcc120_CXXFLAGS="-L$BUILDROOT/lib -L$SDK/usr/lib"
+gcc120_CFLAGS="-L$BUILDROOT/lib -L$SDK/usr/lib"
+
 
 EOF
 
@@ -2564,7 +2597,7 @@ sed -i '' -e 's|$YACC|'"$YACC"'|g' bin/yacc
 cp $SRC/etc/defaults/make.conf etc/defaults/make.conf
 IGNORE_WARNINGS=""
 > etc/make.conf cat <<'EOF'
-CCVER?=clang21
+# CCVER?=clang21
 CFLAGS+=-Wno-nullability-completeness -Wno-macro-redefined
 # Set the machine platform to pc64 if not set
 .if empty(MACHINE_PLATFORM)
@@ -2622,9 +2655,8 @@ rc=0
 
 EXTRA_LDADD=\
 "$(pkg-config --libs libbsd-overlay) "\
-"${LIBDARWIN_LDFLAGS} "\
-"-Wl,-flat_namespace "\
-"-Wl,-prefer_static_for,-lbsd -Wl,-prefer_static_for,-lDarwin"
+"${LIBDARWIN_LDFLAGS} "
+
 # OSX basically hates static linking.
 # if you can show you've got the crt1.o and friends,
 # then add `-static` to STATIC_LDFLAGS (or just remove NXLDFLAGS declaration entirely!)
@@ -2648,31 +2680,21 @@ start_build () {
 		bmake \
 		    -e \
 		    -C "$SRC" \
+            _DEFAULT_CCVER=gcc120 \
             WORLD_VERSION=500302 \
 		    TARGET_ARCH=x86_64 \
 		    CC="$BUILDROOT/bin/cc" \
 		    CXX="$BUILDROOT/bin/c++" \
 		    HOST_CCVER=clang21 \
-		    CCVER=clang21 \
 		    NOSHARED=NO \
 		    _HOSTPATH="$BUILDROOT/bin:${PATH}" \
 		    NXPATH='${_HOSTPATH}' \
 		    NXLDFLAGS="$STATIC_LDFLAGS" \
 		    NXLDLIBS+="$EXTRA_LDADD" \
 		    EXTRA_LDADD+="$EXTRA_LDADD" \
-		    "$make_args"
-}
+		    ${make_args}
+            # '_DEFAULT_CCVER=clang21' \
 
-brief_tail () {
-    local buf="$(tail -20 bw.out)"
-    local buf_len=$(printf "%s\n" "${buf}"| wc -c)
-    local len=100
-    local ch=' '
-    local padding=$(printf '%*s' "$len")
-    printf "%${buf_len}"'s\r' "${padding}"
-    printf "%${buf_len}"'s\r' "$buf"
-    sleep 1
-    printf "%${buf_len}"'s\r' "${padding}"
 }
 
 eval "${_log}" start_build \
@@ -2685,7 +2707,9 @@ if [ "${_background}" != '' ]; then
     t_e="$(date +%s)"
     >&2 printf 'build ended in %ss, return code %s\n' "$((t_e - t_s))" "$rc"
 fi
-printf '\a'
+
+printf '\a\n'
+
 if [ $rc -ne 0 ]; then
     if [ ! -z "${_log}" ]; then
         >&2 printf 'examine log at: %s\n' "$LOGFILE"
