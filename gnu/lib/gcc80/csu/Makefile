@@ -10,7 +10,9 @@ CFLAGS+=	-fno-inline
 CFLAGS+=	-fno-exceptions
 CFLAGS+=	-fno-zero-initialized-in-bss
 CFLAGS+=	-fno-tree-vectorize
+.if ${CCVER:Mgcc*}
 CFLAGS+=	-fbuilding-libgcc
+.endif
 CFLAGS+=	-fno-stack-protector
 CFLAGS+=	-fno-omit-frame-pointer
 CFLAGS+=	-fno-asynchronous-unwind-tables
