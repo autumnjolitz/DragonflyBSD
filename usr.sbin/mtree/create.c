@@ -55,10 +55,6 @@
 #ifndef NO_SHA
 #include <openssl/sha.h>
 #endif
-#define fts_cmp_func
-#if defined(__APPLE__)
-#define fts_cmp_func int (*)(const FTSENT * const*, const FTSENT * const*)
-#endif
 
 #include "extern.h"
 
@@ -113,7 +109,7 @@ cwalk(FILE *fp)
 		    "#\t   date: %s",
 		    user, host, fullpath, ctime(&clocktime));
 
-	if ((t = fts_open(argv, ftsoptions, (fts_cmp_func) dcmp)) == NULL)
+	if ((t = fts_open(argv, ftsoptions, dcmp)) == NULL)
 		mtree_err("fts_open: %s", strerror(errno));
 	while ((p = fts_read(t)) != NULL) {
 		if (jflag)
