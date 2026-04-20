@@ -7,7 +7,7 @@ CONTRIBDIR=	${BASEDIR}/lib
 .PATH:		${CONTRIBDIR} ${CONTRIBDIR}/uniwidth ${CONTRIBDIR}/unistr \
 		${CONTRIBDIR}/glthread
 
-CFLAGS+=	-I${CONTRIBDIR} -I${.CURDIR} -I${.OBJDIR} -I${.CURDIR}/../../../../include
+CFLAGS+=	-I${CONTRIBDIR} -I${.CURDIR} -I${.OBJDIR}
 CFLAGS+=	-DHAVE_CONFIG_H
 
 .if defined(BOOTSTRAPPING)

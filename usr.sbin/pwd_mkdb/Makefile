@@ -10,8 +10,4 @@ SRCS=	pw_scan.c pwd_mkdb.c
 
 CFLAGS+= -I${.CURDIR}/../../lib/libc/gen		# for pw_scan.h
 
-.if ${.MAKE.OS} == "Darwin" # use Dragonfly's includes:
-CFLAGS+=-I${.CURDIR}/../../include
-.endif
-
 .include <bsd.prog.mk>

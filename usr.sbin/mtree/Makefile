@@ -30,7 +30,6 @@ CFLAGS+=-DBOOTSTRAPPING
 .PATH: ${.CURDIR}/../../lib/libc/gen
 SRCS+=	vis.c pwcache.c
 CFLAGS+=-include ${.CURDIR}/../../include/vis.h
-CFLAGS+=-I${.CURDIR}/../../include
 CFLAGS+=-I${.CURDIR}/../../lib/libc/gen
 CFLAGS+=-DEMBED_LIB_SRC
 .endif
