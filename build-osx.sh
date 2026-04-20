@@ -1047,6 +1047,86 @@ ssize_t __fpending(const FILE *fp);
 #endif
 EOF
 
+>include/libdarwin/pwd.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if !defined(LIBDARWIN_PWD_SKIP_IMPORT) && __has_include_next(<pwd.h>)
+#include_next <pwd.h>
+#endif
+#else
+#if !defined(LIBDARWIN_PWD_SKIP_IMPORT) && __has_include(<pwd.h>)
+#include <pwd.h>
+#endif
+#endif
+
+#ifndef _LIBDARWIN_PWD_H_
+#define _LIBDARWIN_PWD_H_
+
+int pwcache_userdb(
+    int (*setpassent)(int),
+    void (*endpwent)(void),
+    struct passwd * (*getpwnam)(const char *),
+    struct passwd * (*getpwuid)(uid_t)
+);
+
+#ifndef _PWF
+#define _PWF(x)     (1 << x)
+#endif
+#ifndef _PWF_NAME
+#define _PWF_NAME   _PWF(0)
+#endif
+#ifndef _PWF_PASSWD
+#define _PWF_PASSWD _PWF(1)
+#endif
+#ifndef _PWF_UID
+#define _PWF_UID    _PWF(2)
+#endif
+#ifndef _PWF_GID
+#define _PWF_GID    _PWF(3)
+#endif
+#ifndef _PWF_CHANGE
+#define _PWF_CHANGE _PWF(4)
+#endif
+#ifndef _PWF_CLASS
+#define _PWF_CLASS  _PWF(5)
+#endif
+#ifndef _PWF_GECOS
+#define _PWF_GECOS  _PWF(6)
+#endif
+#ifndef _PWF_DIR
+#define _PWF_DIR    _PWF(7)
+#endif
+#ifndef _PWF_SHELL
+#define _PWF_SHELL  _PWF(8)
+#endif
+#ifndef _PWF_EXPIRE
+#define _PWF_EXPIRE _PWF(9)
+#endif
+
+#endif
+EOF
+
+>include/libdarwin/grp.h cat <<EOF
+#ifdef LIBDARWIN_OVERLAY
+#if __has_include_next(<grp.h>)
+#include_next <grp.h>
+#endif
+#else
+#if __has_include(<grp.h>)
+#include <grp.h>
+#endif
+#endif
+
+#ifndef _LIBDARWIN_GRP_H_
+#define _LIBDARWIN_GRP_H_
+int pwcache_groupdb(
+    int (*setgroupent)(int), void (*endgrent)(void),
+    struct group * (*getgrnam)(const char *),
+    struct group * (*getgrgid)(gid_t)
+);
+char *group_from_gid(gid_t gid, int nogroup);
+#endif
+EOF
+
 >include/libdarwin/sys/varsym.h cat <<EOF
 #ifndef _SYS_VARSYM_H_
 #define _SYS_VARSYM_H_
@@ -2394,6 +2474,7 @@ start_build () {
 		bmake \
 		    -e \
 		    -C "$SRC" \
+            WORLD_VERSION=500302 \
 		    TARGET_ARCH=x86_64 \
 		    CC="$BUILDROOT/bin/cc" \
 		    CXX="$BUILDROOT/bin/c++" \

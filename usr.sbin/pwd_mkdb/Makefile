@@ -9,5 +9,7 @@ MAN=	pwd_mkdb.8
 SRCS=	pw_scan.c pwd_mkdb.c
 
 CFLAGS+= -I${.CURDIR}/../../lib/libc/gen		# for pw_scan.h
-
+.if ${.MAKE.OS} == "Darwin"
+CFLAGS+= -DLIBDARWIN_PWD_SKIP_IMPORT -include ${.CURDIR}/../../include/pwd.h
+.endif
 .include <bsd.prog.mk>
