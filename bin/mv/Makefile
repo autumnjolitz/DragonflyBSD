@@ -3,5 +3,5 @@
 # $DragonFly: src/bin/mv/Makefile,v 1.4 2005/02/06 06:16:40 okumoto Exp $
 
 PROG=	mv
-CFLAGS+= -I${.CURDIR}/../../include
+
 .include <bsd.prog.mk>
