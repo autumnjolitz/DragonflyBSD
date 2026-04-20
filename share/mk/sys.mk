@@ -317,10 +317,14 @@ MACHINE_PLATFORM!=/sbin/sysctl -n hw.platform
 .endif
 
 # Include base system defaults.
-.if exists(/etc/defaults/make.conf)
-.include </etc/defaults/make.conf>
+__MAKE_DEFAULTS_CONF?=/etc/defaults/make.conf
+.if defined(MAKE_DEFAULTS_CONF)
+__MAKE_DEFAULTS_CONF=${MAKE_DEFAULTS_CONF}
 .endif
 
+.if exists(__MAKE_DEFAULTS_CONF)
+.include "${__MAKE_DEFAULTS_CONF}"
+.endif
 # XXX we should some how include src tree etc/defaults/make.conf too. Changes
 # to default/make.conf only applies after installworld so might produce world
 # that no longer can bootstrap itself.
