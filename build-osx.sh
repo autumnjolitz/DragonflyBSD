@@ -574,7 +574,7 @@ EOF
 
 #ifndef OVERLAY_SYS_STAT_H_
 #define OVERLAY_SYS_STAT_H_
-
+#define _ST_FLAGS_PRESENT_
 #define st_atim st_atimespec
 #define st_mtim st_mtimespec
 #define st_ctim st_ctimespec
@@ -2292,7 +2292,6 @@ EOF
         -e 's|@@INCPREFIX@@|/|g' \
         -e 's|@@MACHARCH@@|x86_64|g' \
         -e 's|@@MACHREL@@|6.5|g' \
-        -e 's|/etc|'"$BUILDROOT/etc"'|g' \
         $SRC/libexec/customcc/cc.sh
 chmod +x bin/cc.sh
 for item in cpp c++ gcc g++ clang-cpp clang++ clang gcov CC
@@ -2388,6 +2387,8 @@ start_build () {
 	    HOST_BINUTILSVER=binutils234 \
 	    MAKE_CONF=$BUILDROOT/etc/make.conf \
 	    MACHINE_PLATFORM=pc64 \
+        CC_COMPILERS_DEFAULTS_CONF=$BUILDROOT/etc/defaults/compilers.conf \
+        CC_COMPILERS_CONF=$BUILDROOT/etc/compilers.conf \
 		bmake \
 		    -e \
 		    -C "$SRC" \
