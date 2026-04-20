@@ -84,6 +84,10 @@ fi
 if [ ! -n "$CLEAN_BUILDROOT" ]; then
 	CLEAN_BUILDROOT=0
 fi
+if [ ! -d "$BUILDROOT" ]; then
+    mkdir -p "$BUILDROOT"
+fi
+BUILDROOT="$(realpath "${BUILDROOT}")"
 
 cd "$BUILDROOT"
 
@@ -2078,13 +2082,85 @@ chmod +x bin/ld-flags-from-script
 
 >bin/ld cat <<'EOF'
 #!/usr/bin/env sh
+set -eu
+if (>/dev/null set -o pipefail); then
+    set -o pipefail
+fi
+
 OIFS="$IFS"
 args=
 sep='
 '
 
+AR_CATALOG="$(mktemp -d)"
+
+cleanup () {
+    if [ "${AR_CATALOG}" != '' ] && [ -d "${AR_CATALOG}" ]; then
+        rm -rf "$AR_CATALOG"
+    fi
+}
+
+_try_static=0
+
+trap cleanup EXIT
+
 while [ $# -gt 0 ]; do
     case "${1}" in
+        -almost_static)
+        shift
+        _try_static=1
+        ;;
+        -lto_library)
+        shift
+        if [ "$args" = '' ]; then
+            args="-lto_library"
+        else
+            args="${args}${sep}-lto_library"
+        fi
+        ;;
+        -l*)
+        shared_lib="$(printf '%s\n' "${1}" | cut -c3-)"
+        shift
+        maybe_static_name="lib${shared_lib}.a"
+        arg="-l${shared_lib}"
+        if [ "${_try_static}" -eq 1 ] ; then
+            if [ -e "${AR_CATALOG}/${maybe_static_name}" ]; then
+                arg="$(realpath "${AR_CATALOG}/${maybe_static_name}")"
+            else
+                >&2 printf 'warn: unable to locate static mirror link %s (static of %s)\n' "${maybe_static_name}" "${shared_lib}"
+            fi
+        fi
+        if [ "$args" = '' ]; then
+            args="${arg}"
+        else
+            args="${args}${sep}${arg}"
+        fi
+
+        ;;
+        -L*)
+        maybe_lib_home=
+        flag="${1}"
+        shift
+        if [ "$flag" = '-L' ]; then
+            if [ "${1:-}" = '' ]; then
+                >&2 printf 'error: missing -L dir!\n'
+                exit 5
+            fi
+            maybe_lib_home="${1}"
+            shift
+        else
+            maybe_lib_home="$(printf '%s\n' "${flag}" | cut -c 3- )"
+        fi
+
+        if [ "$args" = '' ]; then
+            args="-L${sep}${maybe_lib_home}"
+        else
+            args="${args}${sep}-L${sep}${maybe_lib_home}"
+        fi
+        for st in $(ls -1 ${maybe_lib_home}/*.a); do
+            ln -sf "$st" "${AR_CATALOG}"/"$(basename "$st")"
+        done
+        ;;
         -soname)
         shift
         if [ "${1:-}" = '' ]; then
@@ -2150,13 +2226,12 @@ LIBDARWIN_CFLAGS=\
 "-DLIBDARWIN_OVERLAY"
 LIBDARWIN_LDFLAGS="-L$BUILDROOT/lib -lDarwin"
 _CFLAGS='-fPIC -g'
+
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
     -c ${_CFLAGS} \
     pthread_barrier.c \
     -o lib/pthread_barrier.o
-
-
 ${CLANG_HOME}/bin/clang \
     $LIBDARWIN_CFLAGS \
     -c ${_CFLAGS} \
@@ -2298,6 +2373,29 @@ ${CLANG_HOME}/bin/clang \
     -o lib/posix_fallocate.o
 
 unset _CFLAGS
+${CLANG_HOME}/bin/clang \
+        lib/_init.o \
+        lib/base64.o \
+        lib/yywrap.o \
+        lib/reallocarray.o \
+        lib/varsym_shim.o \
+        lib/memrchr.o \
+        lib/memchr.o \
+        lib/mempcpy.o \
+        lib/pthread_barrier.o \
+        lib/pthread_spinlock.o \
+        lib/fpending.o \
+        lib/pipe2.o \
+        lib/getobjformat.o \
+        lib/string.o \
+        lib/eaccess.o \
+        lib/assert.o \
+        lib/file.o \
+        lib/rtld.o \
+        lib/posix_fallocate.o \
+        -shared \
+        -Wl,-install_name,"$PWD/lib/libDarwin.dylib" \
+        -o lib/libDarwin.dylib
 
 ar rvs $PWD/lib/libDarwin.a \
         lib/_init.o \
@@ -2339,8 +2437,12 @@ rm -f lib/*.o
 #endif
 EOF
 
-IGNORE_WARNINGS="-Wno-macro-redefined -Wno-nullability-completeness"
-EXTRA_CFLAGS="${IGNORE_WARNINGS} "\
+
+EXTRA_CFLAGS=\
+"-fapple-link-rtlib "\
+"--rtlib=compiler-rt "\
+"-DLIBCXX_USE_COMPILER_RT=YES "\
+"-DLIBCXXABI_USE_COMPILER_RT=YES "\
 "${LIBDARWIN_CFLAGS} "\
 "$(pkg-config --cflags libbsd-overlay)"
 EXTRA_CXXFLAGS="${LIBDARWIN_CXXFLAGS}"
@@ -2383,6 +2485,9 @@ for item in cpp c++ gcc g++ clang-cpp clang++ clang gcov CC
 do
     ln -sf $PWD/bin/cc.sh bin/$item
 done
+if ! [ -e bin/cc ]; then
+    ln -sf $PWD/bin/cc.sh bin/cc
+fi
 
 YACC="$(command -v yacc)"
 cat >bin/yacc <<'EOT'
@@ -2396,10 +2501,15 @@ exec $YACC $@
 EOT
 sed -i '' -e 's|$YACC|'"$YACC"'|g' bin/yacc
 
-cp $SRC/etc/defaults/make.conf etc/make.conf
-
->> etc/make.conf <<'EOF'
-CFLAGS+=-Wno-nullability-completeness
+cp $SRC/etc/defaults/make.conf etc/defaults/make.conf
+IGNORE_WARNINGS=""
+> etc/make.conf cat <<'EOF'
+CCVER?=clang21
+CFLAGS+=-Wno-nullability-completeness -Wno-macro-redefined
+# Set the machine platform to pc64 if not set
+.if empty(MACHINE_PLATFORM)
+MACHINE_PLATFORM=pc64
+.endif
 
 EOF
 
@@ -2457,7 +2567,7 @@ EXTRA_LDADD=\
 # OSX basically hates static linking.
 # if you can show you've got the crt1.o and friends,
 # then add `-static` to STATIC_LDFLAGS (or just remove NXLDFLAGS declaration entirely!)
-STATIC_LDFLAGS='${LDFLAGS}'
+STATIC_LDFLAGS='-static-libstdc++ -Wl,-almost_static ${LDFLAGS}'
 printf "Setting STATIC_LDFLAGS=%s\nSetting {EXTRA_LDADD, NXLDLIBS} = %s\n" \
 	"$STATIC_LDFLAGS" \
 	"$EXTRA_LDADD"
@@ -2470,8 +2580,8 @@ start_build () {
     env \
 	    MAKEOBJDIRPREFIX="$MAKEOBJDIRPREFIX" \
 	    HOST_BINUTILSVER=binutils234 \
+        MAKE_DEFAULTS_CONF=$BUILDROOT/etc/defaults/make.conf \
 	    MAKE_CONF=$BUILDROOT/etc/make.conf \
-	    MACHINE_PLATFORM=pc64 \
         CC_COMPILERS_DEFAULTS_CONF=$BUILDROOT/etc/defaults/compilers.conf \
         CC_COMPILERS_CONF=$BUILDROOT/etc/compilers.conf \
 		bmake \
