@@ -4,10 +4,6 @@
 
 PROG=	rm
 
-.if ${.MAKE.OS} == "Darwin"
-CFLAGS+= -I${.CURDIR}/../../include
-.endif
-
 LINKS=	${BINDIR}/rm ${BINDIR}/unlink
 MLINKS=	rm.1 unlink.1
 
