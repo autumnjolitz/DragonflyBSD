@@ -12,6 +12,20 @@ CFLAGS+=	-fno-zero-initialized-in-bss
 CFLAGS+=	-fno-tree-vectorize
 .if ${CCVER:Mgcc*}
 CFLAGS+=	-fbuilding-libgcc
+.elif ${CCVER:Mclang*}
+CFLAGS+= -D__LIBGCC_INIT_SECTION_ASM_OP__='"\t.section\t.init"'
+CFLAGS+= -D__LIBGCC_TEXT_SECTION_ASM_OP__='"\t.text"'
+CFLAGS+= -D__LIBGCC_EH_FRAME_SECTION_NAME__='".eh_frame"'
+CFLAGS+= -D__LIBGCC_EH_TABLES_CAN_BE_READ_ONLY__
+CFLAGS+= -DOBJECT_FORMAT_ELF
+CFLAGS+= -DHAVE_LD_EH_FRAME_HDR
+CFLAGS+= -DTARGET_DL_ITERATE_PHDR
+CFLAGS+= -DBSD_DL_ITERATE_PHDR_AVAILABLE
+CFLAGS+= -DHAVE_GAS_HIDDEN
+CFLAGS+= -DUSE_EH_FRAME_REGISTRY
+.if ${.MAKE.OS} == "Darwin"
+CFLAGS+= -DTARGET_MACHO
+.endif
 .endif
 CFLAGS+=	-fno-stack-protector
 CFLAGS+=	-fno-omit-frame-pointer
