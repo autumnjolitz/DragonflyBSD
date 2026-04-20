@@ -1039,6 +1039,8 @@ size_t fread_unlocked(void * restrict ptr, size_t size, size_t nitems, FILE *str
 int fputc_unlocked(int c, FILE *stream);
 int fflush_unlocked(FILE *stream);
 
+ssize_t __fpending(const FILE *fp);
+
 #ifdef __cplusplus
 }
 #endif
