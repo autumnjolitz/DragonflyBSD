@@ -39,8 +39,11 @@ INCPREFIX=@@INCPREFIX@@	# e.g., /
 MACHARCH=@@MACHARCH@@	# e.g., x86_64
 MACHREL=@@MACHREL@@	# e.g., 6.5
 
-. /etc/defaults/compilers.conf
-[ -f /etc/compilers.conf ] && . /etc/compilers.conf
+CC_COMPILERS_DEFAULTS_CONF="${CC_COMPILERS_DEFAULTS_CONF:-/etc/defaults/compilers.conf}"
+CC_COMPILERS_CONF="${CC_COMPILERS_CONF:-/etc/compilers.conf}"
+
+. "${CC_COMPILERS_DEFAULTS_CONF}"
+[ -f "${CC_COMPILERS_CONF}" ] && . "${CC_COMPILERS_CONF}"
 
 case ${CNAME} in
 	gcc)
