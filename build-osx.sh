@@ -575,6 +575,9 @@ EOF
 #ifndef OVERLAY_SYS_STAT_H_
 #define OVERLAY_SYS_STAT_H_
 #define _ST_FLAGS_PRESENT_
+#ifndef UF_XLINK
+#define UF_XLINK    0x00000000
+#endif
 #define st_atim st_atimespec
 #define st_mtim st_mtimespec
 #define st_ctim st_ctimespec
