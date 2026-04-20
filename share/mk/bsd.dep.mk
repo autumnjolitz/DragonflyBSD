@@ -150,10 +150,14 @@ ${DEPENDFILE} ${_DEPENDFILES}: .NOPATH
 #
 _ALL_DEPENDS=${__FLAGS_FILES:N*.[csS]:N*.cc:N*.C:N*.cpp:N*.cxx:N*.m}
 
+_MKDEP_EXTRA_CXX_SRC?=
+.if defined(MKDEP_FORCE_CXX_FOR_C) && ( ${MKDEP_FORCE_CXX_FOR_C} != "NO" && ${MKDEP_FORCE_CXX_FOR_C} != "no" )
+_MKDEP_EXTRA_CXX_SRC+=${.ALLSRC:M*.[csS]}
+.endif
 .for _FG in _ ${FLAGS_GROUPS}
 .depend${_FG:S/^/_/:N__}: ${${_FG}_FLAGS_FILES} ${_ALL_DEPENDS}
 	rm -f ${.TARGET}
-.if ${${_FG}_FLAGS_FILES:M*.[csS]} != ""
+.if ${${_FG}_FLAGS_FILES:M*.[csS]} != "" && !defined(MKDEP_FORCE_CXX_FOR_C)
 	${_MKDEPENV} CC=${MKDEPCC} ${MKDEPCMD} -f ${.TARGET} -a ${MKDEP} \
 	    ${${_FG}_FLAGS:M-I*} \
 	    ${CFLAGS:M--sysroot=*} \
@@ -166,14 +170,17 @@ _ALL_DEPENDS=${__FLAGS_FILES:N*.[csS]:N*.cc:N*.C:N*.cpp:N*.cxx:N*.m}
 .if ${${_FG}_FLAGS_FILES:M*.cc} != "" || \
     ${${_FG}_FLAGS_FILES:M*.C} != "" || \
     ${${_FG}_FLAGS_FILES:M*.cpp} != "" || \
-    ${${_FG}_FLAGS_FILES:M*.cxx} != ""
+    ${${_FG}_FLAGS_FILES:M*.cxx} != "" || \
+	defined(MKDEP_FORCE_CXX_FOR_C) && ${${_FG}_FLAGS_FILES:M*.csS}
 	${_MKDEPENV} CC=${CXX} ${MKDEPCMD} -f ${.TARGET} -a ${MKDEP} \
 	    ${${_FG}_FLAGS:M-I*} \
 	    ${CXXFLAGS:M--sysroot=*} \
 	    ${CXXFLAGS:M-nostdinc*} ${CXXFLAGS:M-[BID]*} \
 	    ${CXXFLAGS:M-std=*} \
 	    ${${_FG}_FLAGS:N-I*} \
-	    ${.ALLSRC:M*.cc} ${.ALLSRC:M*.C} ${.ALLSRC:M*.cpp} ${.ALLSRC:M*.cxx}
+	    ${.ALLSRC:M*.cc} ${.ALLSRC:M*.C} ${.ALLSRC:M*.cpp} ${.ALLSRC:M*.cxx} \
+    	${_MKDEP_EXTRA_CXX_SRC}
+
 .endif
 .if ${${_FG}_FLAGS_FILES:M*.m} != ""
 	${MKDEPCMD} -f ${.TARGET} -a ${MKDEP} \
