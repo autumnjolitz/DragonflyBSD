@@ -2089,6 +2089,7 @@ fi
 
 OIFS="$IFS"
 args=
+_try_static_for=
 sep='
 '
 
@@ -2104,12 +2105,71 @@ _try_static=0
 
 trap cleanup EXIT
 
+skip_arg_no=
+next_arg=
+arg=
+
+if [ $# -gt 0 ]; then
+    for arg_no in $(seq 1 $#)
+    do
+        eval 'next_arg=${'"$(( arg_no + 1 ))"':-}'
+        eval 'arg=${'"${arg_no}"'}'
+        case "${arg}" in
+            -prefer_static)
+                _try_static=1
+                skip_arg_no="${skip_arg_no}:${arg_no}"
+                ;;
+            -prefer_static_for*)
+                skip_arg_no="${skip_arg_no}:${arg_no}"
+                wanna_static_for="$(printf '%s\n' "${1}"| cut -c19-)"
+                if case "${wanna_static_for}" in =*) true ;; *) false ;; esac; then
+                    wanna_static_for="$(printf '%s\n' "${wanna_static_for}" | cut -c2-)"
+                fi
+                if case "${wanna_static_for}" in -l*) true ;; *) false ;; esac; then
+                    wanna_static_for="$(printf '%s\n' "${wanna_static_for}" | cut -c3-)"
+                fi
+                if [ "${wanna_static_for}" = '' ]; then
+                    if [ "${next_arg}" = '' ]; then
+                        >&2 printf '-prefer_static_for requires a library!\n'
+                        exit 6
+                    fi
+                    skip_arg_no="${skip_arg_no}:$((arg_no + 1))"
+                    wanna_static_for="${next_arg}"
+                fi
+                if case "${wanna_static_for}" in -l*) true ;; *) false ;; esac; then
+                    wanna_static_for="$(printf '%s\n' "${wanna_static_for}" | cut -c3-)"
+                fi
+                if [ "${_try_static_for}" = '' ]; then
+                    _try_static_for="${wanna_static_for}"
+                else
+                    _try_static_for="${_try_static_for}${sep}${wanna_static_for}"
+                fi
+            ;;
+            *)
+            if case ":${skip_arg_no}:" in *":${arg_no}:"*) true ;; *) false ;; esac ; then
+                # printf '[%i] removing %s, skip args: %s\n' "${arg_no}" "${arg}" "${skip_arg_no}"
+                continue
+            fi
+            args="${args}${sep}${arg}"
+            ;;
+        esac
+    done
+fi
+
+set -- $args
+
+args=
+
+if [ "$_try_static" -eq 1 ] && [ "${_try_static_for}" != '' ] ; then
+    >&2 printf 'prefer_static selects all libraries, which makes prefer_static_for unnecessary\n'
+    _try_static_for=
+fi
+skip_arg_no="${skip_arg_no}:"
+
+>&2 printf 'ARJ: wanna static: %s\n' "$(printf "${_try_static_for}\n" | tr '\n' ' ')"
+
 while [ $# -gt 0 ]; do
     case "${1}" in
-        -almost_static)
-        shift
-        _try_static=1
-        ;;
         -lto_library)
         shift
         if [ "$args" = '' ]; then
@@ -2123,7 +2183,7 @@ while [ $# -gt 0 ]; do
         shift
         maybe_static_name="lib${shared_lib}.a"
         arg="-l${shared_lib}"
-        if [ "${_try_static}" -eq 1 ] ; then
+        if [ "${_try_static}" -eq 1 ] || [ "${_try_static_for}" != '' ] && (printf "%s\n" "${_try_static_for}" | grep -Fqx "$shared_lib"); then
             if [ -e "${AR_CATALOG}/${maybe_static_name}" ]; then
                 arg="$(realpath "${AR_CATALOG}/${maybe_static_name}")"
             else
@@ -2563,11 +2623,12 @@ rc=0
 EXTRA_LDADD=\
 "$(pkg-config --libs libbsd-overlay) "\
 "${LIBDARWIN_LDFLAGS} "\
-"-Wl,-flat_namespace "
+"-Wl,-flat_namespace "\
+"-Wl,-prefer_static_for,-lbsd -Wl,-prefer_static_for,-lDarwin"
 # OSX basically hates static linking.
 # if you can show you've got the crt1.o and friends,
 # then add `-static` to STATIC_LDFLAGS (or just remove NXLDFLAGS declaration entirely!)
-STATIC_LDFLAGS='-static-libstdc++ -Wl,-almost_static ${LDFLAGS}'
+STATIC_LDFLAGS='-static-libstdc++ -Wl,-prefer_static ${LDFLAGS}'
 printf "Setting STATIC_LDFLAGS=%s\nSetting {EXTRA_LDADD, NXLDLIBS} = %s\n" \
 	"$STATIC_LDFLAGS" \
 	"$EXTRA_LDADD"
